@@ -114,11 +114,131 @@ class MenuEngine extends EventEmitter {
     }
 
     async getCategory(categoryName) {
-        if (!this.menuData || !this.menuData.categories[categoryName]) {
-            throw new Error(`Category '${categoryName}' not found`);
+        if (!this.menuData) {
+            throw new Error('Menu data not loaded');
         }
         
-        return this.menuData.categories[categoryName];
+        // First try exact match
+        if (this.menuData.categories[categoryName]) {
+            return this.menuData.categories[categoryName];
+        }
+        
+        // Try category mapping for user-friendly terms
+        const mappedCategory = this.mapUserCategoryToActual(categoryName);
+        if (mappedCategory && this.menuData.categories[mappedCategory]) {
+            // For protein-based searches, don't return the whole category - search instead
+            const proteinKeywords = ['chicken', 'chickens', 'beef', 'beefs', 'fish', 'fishes', 'salmon', 'salmons', 'meat', 'meats', 'protein', 'proteins'];
+            if (proteinKeywords.includes(categoryName.toLowerCase())) {
+                console.log(`Protein-based search for '${categoryName}', searching for specific items...`);
+                const searchResults = await this.searchItems(categoryName);
+                
+                if (searchResults.length > 0) {
+                    return {
+                        name: `${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} Items`,
+                        description: `Items matching "${categoryName}"`,
+                        icon: "🔍",
+                        items: searchResults.map(item => ({
+                            ...item,
+                            category: undefined
+                        }))
+                    };
+                }
+            } else {
+                // For actual category synonyms, return the full category
+                return this.menuData.categories[mappedCategory];
+            }
+        }
+        
+        // Fallback to keyword search across all items
+        console.log(`Category '${categoryName}' not found, searching for items with keyword...`);
+        const searchResults = await this.searchItems(categoryName);
+        
+        if (searchResults.length > 0) {
+            // Return a virtual category with search results
+            return {
+                name: `${categoryName.charAt(0).toUpperCase() + categoryName.slice(1)} Items`,
+                description: `Items matching "${categoryName}"`,
+                icon: "🔍",
+                items: searchResults.map(item => ({
+                    ...item,
+                    category: undefined // Remove category to avoid confusion
+                }))
+            };
+        }
+        
+        throw new Error(`Category '${categoryName}' not found and no matching items found`);
+    }
+
+    mapUserCategoryToActual(userCategory) {
+        const categoryMappings = {
+            // Protein-based mappings (singular and plural)
+            'chicken': 'mains',
+            'chickens': 'mains',
+            'beef': 'mains',
+            'beefs': 'mains',
+            'fish': 'mains',
+            'fishes': 'mains',
+            'salmon': 'mains',
+            'salmons': 'mains',
+            'meat': 'mains',
+            'meats': 'mains',
+            'protein': 'mains',
+            'proteins': 'mains',
+            
+            // Category synonyms
+            'starters': 'appetizers',
+            'starter': 'appetizers',
+            'apps': 'appetizers',
+            'app': 'appetizers',
+            'salads': 'appetizers',
+            'salad': 'appetizers',
+            'sides': 'appetizers',
+            'side': 'appetizers',
+            
+            'entrees': 'mains',
+            'entree': 'mains',
+            'main': 'mains',
+            'mains': 'mains',
+            'dinner': 'mains',
+            'dinners': 'mains',
+            'lunch': 'mains',
+            'lunches': 'mains',
+            
+            'drinks': 'beverages',
+            'drink': 'beverages',
+            'soda': 'beverages',
+            'sodas': 'beverages',
+            'juice': 'beverages',
+            'juices': 'beverages',
+            'coffee': 'beverages',
+            'coffees': 'beverages',
+            
+            'dessert': 'desserts',
+            'sweets': 'desserts',
+            'sweet': 'desserts',
+            'cake': 'desserts',
+            'cakes': 'desserts',
+            'pie': 'desserts',
+            'pies': 'desserts'
+        };
+        
+        return categoryMappings[userCategory.toLowerCase()];
+    }
+
+    // Enhanced search that includes category information
+    async searchItemsByKeyword(keyword) {
+        return await this.searchItems(keyword);
+    }
+
+    // Get available categories for NLU context
+    getAvailableCategories() {
+        if (!this.menuData) return [];
+        
+        return Object.keys(this.menuData.categories).map(key => ({
+            key: key,
+            name: this.menuData.categories[key].name,
+            description: this.menuData.categories[key].description
+        }));
     }
 
     async getItemDetails(itemId) {
@@ -171,13 +291,24 @@ class MenuEngine extends EventEmitter {
         const results = [];
         const normalizedQuery = query.toLowerCase();
         
+        // Generate search terms including singular/plural variations
+        const searchTerms = this.generateSearchTerms(normalizedQuery);
+        
         for (const categoryName in this.menuData.categories) {
             const category = this.menuData.categories[categoryName];
             
             for (const item of category.items) {
-                // Search in name and description
-                if (item.name.toLowerCase().includes(normalizedQuery) ||
-                    item.description.toLowerCase().includes(normalizedQuery)) {
+                // Search in name and description with multiple terms
+                let found = false;
+                for (const term of searchTerms) {
+                    if (item.name.toLowerCase().includes(term) ||
+                        item.description.toLowerCase().includes(term)) {
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (found) {
                     results.push({
                         ...item,
                         category: categoryName,
@@ -191,6 +322,33 @@ class MenuEngine extends EventEmitter {
         results.sort((a, b) => b.relevance - a.relevance);
         
         return results;
+    }
+
+    generateSearchTerms(query) {
+        const terms = [query];
+        
+        // Handle plural/singular variations
+        const pluralMappings = {
+            'chickens': ['chicken'],
+            'chicken': ['chicken'],
+            'beefs': ['beef'],
+            'beef': ['beef'],
+            'fishes': ['fish'],
+            'fish': ['fish', 'salmon'],
+            'salmons': ['salmon'],
+            'salmon': ['salmon'],
+            'burgers': ['burger'],
+            'burger': ['burger'],
+            'drinks': ['drink', 'juice', 'cola', 'coffee'],
+            'drink': ['drink', 'juice', 'cola', 'coffee']
+        };
+        
+        if (pluralMappings[query]) {
+            terms.push(...pluralMappings[query]);
+        }
+        
+        // Remove duplicates
+        return [...new Set(terms)];
     }
 
     calculateRelevance(item, query) {

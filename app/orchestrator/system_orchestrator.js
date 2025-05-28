@@ -398,9 +398,22 @@ class SystemOrchestrator extends EventEmitter {
                             this.emit('ui-update', uiUpdate);
                         } else if (action.data.view === 'items' && action.data.category) {
                             console.log('🔍 Getting category items for:', action.data.category);
-                            const items = await this.components.menuEngine.getCategory(action.data.category);
-                            console.log('🔍 Emitting ui-update: show-category with', items?.length || 0, 'items');
-                            this.emit('ui-update', { type: 'show-category', data: { category: action.data.category, items }});
+                            try {
+                                const categoryResult = await this.components.menuEngine.getCategory(action.data.category);
+                                console.log('🔍 Category resolution successful:', {
+                                    requestedCategory: action.data.category,
+                                    resolvedName: categoryResult.name,
+                                    itemCount: categoryResult.items?.length || 0
+                                });
+                                console.log('🔍 Emitting ui-update: show-category with', categoryResult.items?.length || 0, 'items');
+                                this.emit('ui-update', { type: 'show-category', data: { category: action.data.category, items: categoryResult }});
+                            } catch (error) {
+                                console.error('🚨 Category resolution failed:', {
+                                    requestedCategory: action.data.category,
+                                    error: error.message
+                                });
+                                throw error; // Re-throw to maintain existing error handling
+                            }
                         }
                         break;
                     case 'show_menu_category': // More specific action

@@ -64,6 +64,19 @@ Available intents:
 - help: Customer needs assistance
 - goodbye: Customer is leaving
 
+Available menu categories:
+- appetizers: Appetizers (starters, salads, wings)
+- mains: Main Courses (burgers, pasta, salmon, entrees)
+- beverages: Beverages (drinks, sodas, juices, coffee)
+- desserts: Desserts (cakes, pies, sweets)
+
+For browse_menu intent, map user requests to these categories:
+- "chicken" or "meat" requests → use "chicken" as category (system will search for chicken items)
+- "starters" or "apps" → use "appetizers"
+- "entrees" or "dinner" → use "mains"
+- "drinks" or "soda" → use "beverages"
+- "sweets" or "cake" → use "desserts"
+
 Extract entities like: item_name, quantity, category, modifications, etc.`,
 
                 intent: `Analyze this customer input and determine their intent and extract entities.
@@ -152,6 +165,25 @@ JSON format only:`
         this.fallbackPatterns.set(/(dessert|sweet|cake|pie)/i, {
             intent: 'browse_menu',
             entities: { category: 'desserts' },
+            confidence: 0.8
+        });
+        
+        // Protein/ingredient-based patterns
+        this.fallbackPatterns.set(/(chicken|chickens)/i, {
+            intent: 'browse_menu',
+            entities: { category: 'chicken' },
+            confidence: 0.8
+        });
+        
+        this.fallbackPatterns.set(/(beef|meat|protein)/i, {
+            intent: 'browse_menu',
+            entities: { category: 'beef' },
+            confidence: 0.8
+        });
+        
+        this.fallbackPatterns.set(/(fish|salmon|seafood)/i, {
+            intent: 'browse_menu',
+            entities: { category: 'fish' },
             confidence: 0.8
         });
     }
