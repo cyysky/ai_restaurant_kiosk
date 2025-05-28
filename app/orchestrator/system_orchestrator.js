@@ -196,7 +196,6 @@ class SystemOrchestrator extends EventEmitter {
     }
 
     async handleSpeechInput(audioData) { // audioData is now {text, confidence, timestamp, source}
-        console.log('🔍 DEBUG: handleSpeechInput called with audioData:', JSON.stringify(audioData));
         try {
             console.log(`🔍 Processing speech input from ${audioData.source}: "${audioData.text}"`);
             console.log('🔍 Audio data structure:', audioData);
