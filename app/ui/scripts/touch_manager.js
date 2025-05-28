@@ -169,21 +169,30 @@ class TouchManager {
     }
 
     showMenuItems(category) {
+        console.log('🔍 DEBUG: TouchManager.showMenuItems called with category:', category);
+        console.log('🔍 DEBUG: Available menu data categories:', this.menuData ? Object.keys(this.menuData) : 'No menu data');
+        console.log('🔍 DEBUG: Category exists in menu data:', !!(this.menuData && this.menuData[category]));
+        
         if (!this.menuData || !this.menuData[category]) {
-            console.error('No menu data for category:', category);
+            console.error('🚨 CRITICAL: No menu data for category:', category);
+            console.error('🚨 CRITICAL: Available categories:', this.menuData ? Object.keys(this.menuData) : 'No menu data');
+            console.error('🚨 CRITICAL: Menu data structure:', this.menuData);
             return;
         }
         
         this.currentCategory = category;
         const items = this.menuData[category];
         
+        console.log('🔍 DEBUG: Found items for category:', items.length);
+        
         // Update UI
         document.getElementById('menu-categories').classList.add('hidden');
         document.getElementById('menu-items').classList.remove('hidden');
-        document.getElementById('current-category').textContent = 
+        document.getElementById('current-category').textContent =
             category.charAt(0).toUpperCase() + category.slice(1);
         
         // Render items
+        console.log('🔍 DEBUG: Calling renderMenuItems with', items.length, 'items');
         this.renderMenuItems(items);
     }
 

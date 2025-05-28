@@ -471,7 +471,16 @@ class KioskApp {
                 break;
             case 'show-category':
                 console.log('🔍 UI Update: Showing category items for:', update.data.category);
-                this.showMenuItems(update.data.category);
+                console.log('🔍 UI Update: Items data received:', update.data.items);
+                
+                // 🔍 FIX: Handle virtual categories from backend
+                if (update.data.items && update.data.items.items) {
+                    console.log('🔍 FIX: Backend provided virtual category with items');
+                    this.showVirtualCategoryItems(update.data.category, update.data.items);
+                } else {
+                    console.log('🔍 FIX: Using local menu data for category');
+                    this.showMenuItems(update.data.category);
+                }
                 break;
             case 'show-cart':
                 console.log('🔍 UI Update: Showing cart');
@@ -881,6 +890,10 @@ class KioskApp {
     }
 
     showMenuItems(category) {
+        console.log('🔍 DEBUG: showMenuItems called with category:', category);
+        console.log('🔍 DEBUG: Current mode:', this.currentMode);
+        console.log('🔍 DEBUG: Menu data available:', !!this.menuData);
+        
         this.currentView = 'items';
         this.currentCategory = category;
         
@@ -888,9 +901,50 @@ class KioskApp {
         document.getElementById('menu-items').classList.remove('hidden');
         document.getElementById('current-category').textContent = category.charAt(0).toUpperCase() + category.slice(1);
         
-        // Update touch panel if in touch mode
-        if (this.currentMode === 'touch') {
-            this.touchManager.showMenuItems(category);
+        // 🔍 FIX: Always render menu items regardless of mode
+        // The touch manager handles the actual rendering logic
+        console.log('🔍 DEBUG: Calling touchManager.showMenuItems for category:', category);
+        this.touchManager.showMenuItems(category);
+        
+        // 🔍 FIX: In voice mode, ensure the touch panel is visible so menu items can be seen
+        if (this.currentMode === 'voice') {
+            console.log('🔍 DEBUG: Voice mode - ensuring touch panel is visible for menu display');
+            const touchPanel = document.getElementById('touch-panel');
+            if (touchPanel) {
+                touchPanel.style.display = 'block';
+                console.log('🔍 DEBUG: Touch panel made visible for voice mode menu display');
+            } else {
+                console.error('🚨 CRITICAL: touch-panel element not found!');
+            }
+        }
+    }
+
+    showVirtualCategoryItems(categoryName, categoryData) {
+        console.log('🔍 DEBUG: showVirtualCategoryItems called with:', categoryName, categoryData);
+        
+        this.currentView = 'items';
+        this.currentCategory = categoryName;
+        
+        // Update UI containers
+        document.getElementById('menu-categories').classList.add('hidden');
+        document.getElementById('menu-items').classList.remove('hidden');
+        document.getElementById('current-category').textContent =
+            categoryData.name || categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
+        
+        // 🔍 FIX: Directly render the items from backend data
+        console.log('🔍 DEBUG: Rendering virtual category items:', categoryData.items.length);
+        this.touchManager.renderMenuItems(categoryData.items);
+        
+        // 🔍 FIX: In voice mode, ensure the touch panel is visible so menu items can be seen
+        if (this.currentMode === 'voice') {
+            console.log('🔍 DEBUG: Voice mode - ensuring touch panel is visible for virtual category display');
+            const touchPanel = document.getElementById('touch-panel');
+            if (touchPanel) {
+                touchPanel.style.display = 'block';
+                console.log('🔍 DEBUG: Touch panel made visible for voice mode virtual category display');
+            } else {
+                console.error('🚨 CRITICAL: touch-panel element not found!');
+            }
         }
     }
 
