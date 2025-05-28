@@ -79,7 +79,22 @@ class KioskApplication {
     // Enhanced logging for frontend errors when logging is enabled
     if (this.isLoggingEnabled) {
       this.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-        console.log(`[FRONTEND ${level.toUpperCase()}] ${message}`);
+        // Debug logging to validate level parameter type and value
+        console.log(`[DEBUG] Level type: ${typeof level}, value: ${level}`);
+        
+        // Convert level to string safely
+        let levelStr;
+        if (typeof level === 'string') {
+          levelStr = level.toUpperCase();
+        } else if (typeof level === 'number') {
+          // Map numeric levels to string equivalents
+          const levelMap = { 0: 'INFO', 1: 'WARNING', 2: 'ERROR', 3: 'DEBUG' };
+          levelStr = levelMap[level] || `LEVEL_${level}`;
+        } else {
+          levelStr = String(level).toUpperCase();
+        }
+        
+        console.log(`[FRONTEND ${levelStr}] ${message}`);
         if (line && sourceId) {
           console.log(`  at ${sourceId}:${line}`);
         }
