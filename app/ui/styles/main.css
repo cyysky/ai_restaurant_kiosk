@@ -207,8 +207,8 @@ body {
 }
 
 .voice-feedback {
-    margin-top: 2rem;
-    min-height: 100px;
+    margin-top: 1rem;
+    min-height: 60px;
 }
 
 .listening-indicator {
@@ -657,4 +657,45 @@ body {
     .items-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* Voice Mode Specific Styles */
+.voice-mode .interaction-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.voice-mode .voice-panel {
+    height: auto; /* Allow voice panel to shrink to content size */
+    flex-shrink: 0;
+}
+
+.voice-mode .touch-panel {
+    flex-grow: 1; /* Allow touch panel (menu) to take remaining space */
+    display: block !important; /* Ensure it's visible when menu is shown */
+    position: static; /* Override previous relative positioning */
+    top: auto;
+    margin-bottom: 0;
+}
+
+.voice-mode .menu-items {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 1rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    margin-top: 1rem;
+}
+
+.voice-mode .speech-text {
+    margin-bottom: 0.5rem;
+}
+
+/* Compact voice feedback in voice mode */
+.voice-mode .voice-feedback {
+    margin-top: 0.5rem;
+    min-height: 40px;
+}
+
+.voice-mode .voice-controls {
+    padding: 1rem 0;
 }

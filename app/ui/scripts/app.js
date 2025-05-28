@@ -511,11 +511,15 @@ class KioskApp {
             document.getElementById('voice-mode-btn').classList.add('active');
             document.getElementById('voice-panel').style.display = 'block';
             document.getElementById('touch-panel').style.display = 'none';
+            document.body.classList.add('voice-mode');
+            document.body.classList.remove('touch-mode');
             this.avatarManager.speak("Voice mode activated. You can speak to me now.");
         } else {
             document.getElementById('touch-mode-btn').classList.add('active');
             document.getElementById('voice-panel').style.display = 'none';
             document.getElementById('touch-panel').style.display = 'block';
+            document.body.classList.add('touch-mode');
+            document.body.classList.remove('voice-mode');
             this.avatarManager.speak("Touch mode activated. You can use the screen to navigate.");
         }
         
@@ -906,12 +910,13 @@ class KioskApp {
         console.log('🔍 DEBUG: Calling touchManager.showMenuItems for category:', category);
         this.touchManager.showMenuItems(category);
         
-        // 🔍 FIX: In voice mode, ensure the touch panel is visible so menu items can be seen
+        // 🔍 FIX: In voice mode, ensure the touch panel is visible and positioned for menu display
         if (this.currentMode === 'voice') {
             console.log('🔍 DEBUG: Voice mode - ensuring touch panel is visible for menu display');
             const touchPanel = document.getElementById('touch-panel');
             if (touchPanel) {
                 touchPanel.style.display = 'block';
+                // The 'voice-mode' class on document.body is handled by setMode
                 console.log('🔍 DEBUG: Touch panel made visible for voice mode menu display');
             } else {
                 console.error('🚨 CRITICAL: touch-panel element not found!');
@@ -935,12 +940,13 @@ class KioskApp {
         console.log('🔍 DEBUG: Rendering virtual category items:', categoryData.items.length);
         this.touchManager.renderMenuItems(categoryData.items);
         
-        // 🔍 FIX: In voice mode, ensure the touch panel is visible so menu items can be seen
+        // 🔍 FIX: In voice mode, ensure the touch panel is visible and positioned for menu display
         if (this.currentMode === 'voice') {
             console.log('🔍 DEBUG: Voice mode - ensuring touch panel is visible for virtual category display');
             const touchPanel = document.getElementById('touch-panel');
             if (touchPanel) {
                 touchPanel.style.display = 'block';
+                // The 'voice-mode' class on document.body is handled by setMode
                 console.log('🔍 DEBUG: Touch panel made visible for voice mode virtual category display');
             } else {
                 console.error('🚨 CRITICAL: touch-panel element not found!');
