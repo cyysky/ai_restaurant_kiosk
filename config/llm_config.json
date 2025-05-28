@@ -1,0 +1,28 @@
+{
+  "baseURL": "http://localhost:11434/v1",
+  "model": "gemma3:4b",
+  "temperature": 0.7,
+  "maxTokens": 150,
+  "timeout": 10000,
+  "retryAttempts": 3,
+  "retryDelay": 1000,
+  "streamResponse": false,
+  "modelParameters": {
+    "top_p": 0.9,
+    "top_k": 40,
+    "repeat_penalty": 1.1,
+    "seed": -1,
+    "num_ctx": 2048
+  },
+  "fallbackConfig": {
+    "enabled": true,
+    "confidenceThreshold": 0.7,
+    "usePatternMatching": true
+  },
+  "performance": {
+    "maxConcurrentRequests": 3,
+    "requestQueueSize": 10,
+    "cacheResponses": true,
+    "cacheTTL": 300000
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "confidenceThreshold": 0.7,
+  "fallbackEnabled": true,
+  "contextWindow": 5,
+  "maxHistorySize": 20,
+  
+  "intentClassification": {
+    "supportedIntents": [
+      "greeting",
+      "browse_menu", 
+      "add_item",
+      "remove_item",
+      "view_cart",
+      "checkout",
+      "help",
+      "goodbye"
+    ],
+    "defaultIntent": "help",
+    "ambiguityThreshold": 0.3
+  },
+  
+  "entityExtraction": {
+    "supportedEntities": [
+      "item_name",
+      "quantity", 
+      "category",
+      "modifications",
+      "dietary_restrictions",
+      "cooking_preference",
+      "size",
+      "price_range"
+    ],
+    "extractionMethods": {
+      "item_name": ["llm", "fuzzy_match", "keyword"],
+      "quantity": ["regex", "llm"],
+      "category": ["keyword", "llm"],
+      "modifications": ["llm", "keyword"]
+    }
+  },
+  
+  "contextManagement": {
+    "trackConversationState": true,
+    "maintainUserPreferences": true,
+    "sessionTimeout": 1800000,
+    "contextDecayFactor": 0.9
+  },
+  
+  "fallbackStrategies": {
+    "patternMatching": {
+      "enabled": true,
+      "patterns": {
+        "greeting": ["^(hi|hello|hey|good morning|good afternoon|good evening)"],
+        "goodbye": ["^(bye|goodbye|see you|thanks|thank you)"],
+        "menu": ["(menu|categories|what do you have|show me)"],
+        "cart": ["(cart|order|what's in my)"],
+        "checkout": ["(checkout|pay|complete|finish|done)"],
+        "help": ["(help|assist|support|don't understand)"]
+      }
+    },
+    "keywordMatching": {
+      "enabled": true,
+      "categories": {
+        "appetizers": ["appetizer", "starter", "salad", "soup"],
+        "mains": ["main", "entree", "dinner", "lunch", "burger", "sandwich"],
+        "beverages": ["drink", "beverage", "soda", "juice", "water", "coffee"],
+        "desserts": ["dessert", "sweet", "cake", "pie", "ice cream"]
+      }
+    },
+    "fuzzyMatching": {
+      "enabled": true,
+      "threshold": 0.8,
+      "algorithm": "levenshtein"
+    }
+  },
+  
+  "preprocessing": {
+    "normalization": {
+      "lowercase": true,
+      "removeStopWords": false,
+      "stemming": false,
+      "removePunctuation": true
+    },
+    "languageDetection": {
+      "enabled": true,
+      "supportedLanguages": ["en"],
+      "defaultLanguage": "en"
+    }
+  },
+  
+  "postprocessing": {
+    "confidenceCalibration": {
+      "enabled": true,
+      "method": "platt_scaling"
+    },
+    "intentDisambiguation": {
+      "enabled": true,
+      "useContext": true,
+      "askForClarification": true
+    }
+  },
+  
+  "performance": {
+    "caching": {
+      "enabled": true,
+      "ttl": 300000,
+      "maxSize": 1000
+    },
+    "batching": {
+      "enabled": false,
+      "maxBatchSize": 10,
+      "timeout": 100
+    }
+  },
+  
+  "debugging": {
+    "logLevel": "info",
+    "logIntents": true,
+    "logEntities": true,
+    "logConfidence": true,
+    "logFallbacks": true
+  }
+}

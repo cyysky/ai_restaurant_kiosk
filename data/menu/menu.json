@@ -1,0 +1,279 @@
+{
+  "restaurant": {
+    "name": "AI Kiosk Restaurant",
+    "description": "Fresh, delicious food served with AI-powered convenience",
+    "lastUpdated": "2025-05-28T12:00:00Z"
+  },
+  "categories": {
+    "appetizers": {
+      "name": "Appetizers",
+      "description": "Start your meal with our delicious appetizers",
+      "icon": "🥗",
+      "items": [
+        {
+          "id": 1,
+          "name": "Caesar Salad",
+          "description": "Fresh romaine lettuce with parmesan cheese, croutons, and our signature Caesar dressing",
+          "price": 8.99,
+          "calories": 320,
+          "prepTime": 5,
+          "dietary": ["vegetarian"],
+          "allergens": ["dairy", "gluten"],
+          "popularity": 0.85,
+          "available": true,
+          "image": "caesar_salad.jpg"
+        },
+        {
+          "id": 2,
+          "name": "Chicken Wings",
+          "description": "Spicy buffalo wings served with ranch dipping sauce and celery sticks",
+          "price": 12.99,
+          "calories": 580,
+          "prepTime": 12,
+          "dietary": [],
+          "allergens": ["dairy"],
+          "popularity": 0.92,
+          "available": true,
+          "image": "chicken_wings.jpg"
+        },
+        {
+          "id": 3,
+          "name": "Mozzarella Sticks",
+          "description": "Golden fried mozzarella cheese sticks with marinara sauce",
+          "price": 7.99,
+          "calories": 450,
+          "prepTime": 8,
+          "dietary": ["vegetarian"],
+          "allergens": ["dairy", "gluten"],
+          "popularity": 0.78,
+          "available": true,
+          "image": "mozzarella_sticks.jpg"
+        }
+      ]
+    },
+    "mains": {
+      "name": "Main Courses",
+      "description": "Hearty and satisfying main dishes",
+      "icon": "🍽️",
+      "items": [
+        {
+          "id": 4,
+          "name": "Grilled Salmon",
+          "description": "Fresh Atlantic salmon with lemon herb seasoning, served with rice and vegetables",
+          "price": 18.99,
+          "calories": 520,
+          "prepTime": 15,
+          "dietary": ["gluten-free", "healthy"],
+          "allergens": ["fish"],
+          "popularity": 0.88,
+          "available": true,
+          "image": "grilled_salmon.jpg"
+        },
+        {
+          "id": 5,
+          "name": "Classic Beef Burger",
+          "description": "Juicy beef patty with lettuce, tomato, onion, and our special sauce, served with fries",
+          "price": 14.99,
+          "calories": 720,
+          "prepTime": 12,
+          "dietary": [],
+          "allergens": ["gluten", "dairy"],
+          "popularity": 0.95,
+          "available": true,
+          "image": "beef_burger.jpg"
+        },
+        {
+          "id": 6,
+          "name": "Chicken Alfredo Pasta",
+          "description": "Tender chicken breast over fettuccine pasta in creamy alfredo sauce",
+          "price": 16.99,
+          "calories": 680,
+          "prepTime": 14,
+          "dietary": [],
+          "allergens": ["gluten", "dairy"],
+          "popularity": 0.82,
+          "available": true,
+          "image": "chicken_alfredo.jpg"
+        },
+        {
+          "id": 7,
+          "name": "Vegetarian Pizza",
+          "description": "12-inch pizza with fresh vegetables, mozzarella cheese, and tomato sauce",
+          "price": 13.99,
+          "calories": 580,
+          "prepTime": 18,
+          "dietary": ["vegetarian"],
+          "allergens": ["gluten", "dairy"],
+          "popularity": 0.75,
+          "available": true,
+          "image": "veggie_pizza.jpg"
+        }
+      ]
+    },
+    "beverages": {
+      "name": "Beverages",
+      "description": "Refreshing drinks to complement your meal",
+      "icon": "🥤",
+      "items": [
+        {
+          "id": 8,
+          "name": "Coca Cola",
+          "description": "Classic refreshing cola drink",
+          "price": 2.99,
+          "calories": 140,
+          "prepTime": 1,
+          "dietary": [],
+          "allergens": [],
+          "popularity": 0.90,
+          "available": true,
+          "image": "coca_cola.jpg",
+          "sizes": ["Small", "Medium", "Large"]
+        },
+        {
+          "id": 9,
+          "name": "Fresh Orange Juice",
+          "description": "Freshly squeezed orange juice, no pulp",
+          "price": 4.99,
+          "calories": 110,
+          "prepTime": 2,
+          "dietary": ["vegan", "gluten-free"],
+          "allergens": [],
+          "popularity": 0.72,
+          "available": true,
+          "image": "orange_juice.jpg"
+        },
+        {
+          "id": 10,
+          "name": "Iced Coffee",
+          "description": "Cold brew coffee served over ice with optional cream and sugar",
+          "price": 3.99,
+          "calories": 25,
+          "prepTime": 3,
+          "dietary": ["vegan"],
+          "allergens": [],
+          "popularity": 0.85,
+          "available": true,
+          "image": "iced_coffee.jpg"
+        },
+        {
+          "id": 11,
+          "name": "Sparkling Water",
+          "description": "Refreshing sparkling water with natural flavors",
+          "price": 2.49,
+          "calories": 0,
+          "prepTime": 1,
+          "dietary": ["vegan", "gluten-free"],
+          "allergens": [],
+          "popularity": 0.65,
+          "available": true,
+          "image": "sparkling_water.jpg"
+        }
+      ]
+    },
+    "desserts": {
+      "name": "Desserts",
+      "description": "Sweet treats to end your meal perfectly",
+      "icon": "🍰",
+      "items": [
+        {
+          "id": 12,
+          "name": "Chocolate Cake",
+          "description": "Rich chocolate cake with vanilla ice cream and chocolate sauce",
+          "price": 6.99,
+          "calories": 520,
+          "prepTime": 5,
+          "dietary": ["vegetarian"],
+          "allergens": ["gluten", "dairy", "eggs"],
+          "popularity": 0.88,
+          "available": true,
+          "image": "chocolate_cake.jpg"
+        },
+        {
+          "id": 13,
+          "name": "Apple Pie",
+          "description": "Homemade apple pie with cinnamon and a flaky crust",
+          "price": 5.99,
+          "calories": 410,
+          "prepTime": 4,
+          "dietary": ["vegetarian"],
+          "allergens": ["gluten", "dairy"],
+          "popularity": 0.76,
+          "available": true,
+          "image": "apple_pie.jpg"
+        },
+        {
+          "id": 14,
+          "name": "Ice Cream Sundae",
+          "description": "Three scoops of vanilla ice cream with chocolate sauce, whipped cream, and cherry",
+          "price": 4.99,
+          "calories": 380,
+          "prepTime": 3,
+          "dietary": ["vegetarian"],
+          "allergens": ["dairy"],
+          "popularity": 0.82,
+          "available": true,
+          "image": "ice_cream_sundae.jpg"
+        },
+        {
+          "id": 15,
+          "name": "Fresh Fruit Bowl",
+          "description": "Seasonal fresh fruits including strawberries, grapes, and melon",
+          "price": 4.49,
+          "calories": 120,
+          "prepTime": 3,
+          "dietary": ["vegan", "gluten-free", "healthy"],
+          "allergens": [],
+          "popularity": 0.68,
+          "available": true,
+          "image": "fruit_bowl.jpg"
+        }
+      ]
+    }
+  },
+  "specials": {
+    "dailySpecial": {
+      "name": "Today's Special",
+      "description": "Chef's recommendation for today",
+      "item": {
+        "id": 16,
+        "name": "BBQ Ribs Platter",
+        "description": "Slow-cooked BBQ ribs with coleslaw and cornbread",
+        "price": 19.99,
+        "originalPrice": 22.99,
+        "calories": 850,
+        "prepTime": 20,
+        "dietary": [],
+        "allergens": ["gluten"],
+        "available": true
+      }
+    },
+    "comboDeals": [
+      {
+        "id": "combo1",
+        "name": "Burger Combo",
+        "description": "Classic Beef Burger + Fries + Drink",
+        "items": [5, 8],
+        "price": 16.99,
+        "savings": 0.99
+      },
+      {
+        "id": "combo2",
+        "name": "Family Meal",
+        "description": "2 Main Courses + 2 Appetizers + 4 Drinks",
+        "price": 49.99,
+        "savings": 8.95
+      }
+    ]
+  },
+  "nutritionalInfo": {
+    "showCalories": true,
+    "showAllergens": true,
+    "showDietary": true
+  },
+  "ordering": {
+    "minimumOrder": 5.00,
+    "taxRate": 0.08,
+    "serviceCharge": 0.00,
+    "acceptedPayments": ["cash", "card", "mobile"]
+  }
+}

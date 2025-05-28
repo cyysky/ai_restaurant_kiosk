@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Kiosk System</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/touch.css">
+    <link rel="stylesheet" href="styles/avatar.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header Section -->
+        <header class="kiosk-header">
+            <div class="logo-section">
+                <h1>AI Restaurant Kiosk</h1>
+            </div>
+            <div class="status-section">
+                <div id="voice-status" class="status-indicator">
+                    <span class="status-icon">🎤</span>
+                    <span class="status-text">Voice Ready</span>
+                </div>
+                <div id="system-status" class="status-indicator">
+                    <span class="status-icon">🟢</span>
+                    <span class="status-text">Online</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Avatar Section -->
+            <section class="avatar-section">
+                <div id="avatar-container">
+                    <div id="avatar-display">
+                        <div class="avatar-placeholder">
+                            <div class="avatar-face">
+                                <div class="avatar-eyes">
+                                    <div class="eye left-eye"></div>
+                                    <div class="eye right-eye"></div>
+                                </div>
+                                <div class="avatar-mouth"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="avatar-speech-bubble" class="speech-bubble hidden">
+                        <p id="avatar-text">Hello! How can I help you today?</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Menu and Interaction Section -->
+            <section class="interaction-section">
+                <!-- Voice Interaction Panel -->
+                <div id="voice-panel" class="interaction-panel">
+                    <div class="voice-controls">
+                        <button id="voice-toggle" class="voice-button">
+                            <span class="button-icon">🎤</span>
+                            <span class="button-text">Tap to Speak</span>
+                        </button>
+                        <div id="voice-feedback" class="voice-feedback">
+                            <div id="listening-indicator" class="listening-indicator hidden">
+                                <div class="pulse-ring"></div>
+                                <div class="pulse-ring"></div>
+                                <div class="pulse-ring"></div>
+                            </div>
+                            <p id="speech-text" class="speech-text"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Touch Navigation Panel -->
+                <div id="touch-panel" class="interaction-panel">
+                    <!-- Menu Categories -->
+                    <div id="menu-categories" class="menu-categories">
+                        <h2>Menu Categories</h2>
+                        <div class="category-grid">
+                            <button class="category-btn" data-category="appetizers">
+                                <span class="category-icon">🥗</span>
+                                <span class="category-name">Appetizers</span>
+                            </button>
+                            <button class="category-btn" data-category="mains">
+                                <span class="category-icon">🍽️</span>
+                                <span class="category-name">Main Courses</span>
+                            </button>
+                            <button class="category-btn" data-category="beverages">
+                                <span class="category-icon">🥤</span>
+                                <span class="category-name">Beverages</span>
+                            </button>
+                            <button class="category-btn" data-category="desserts">
+                                <span class="category-icon">🍰</span>
+                                <span class="category-name">Desserts</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Menu Items Display -->
+                    <div id="menu-items" class="menu-items hidden">
+                        <div class="menu-header">
+                            <button id="back-to-categories" class="back-button">← Back to Categories</button>
+                            <h2 id="current-category">Menu Items</h2>
+                        </div>
+                        <div id="items-grid" class="items-grid">
+                            <!-- Menu items will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Item Details Modal -->
+                    <div id="item-modal" class="modal hidden">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3 id="modal-item-name">Item Name</h3>
+                                <button id="close-modal" class="close-button">×</button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="item-image">
+                                    <div class="image-placeholder">📷</div>
+                                </div>
+                                <div class="item-details">
+                                    <p id="modal-item-description">Item description</p>
+                                    <p id="modal-item-price" class="price">$0.00</p>
+                                    <div class="quantity-controls">
+                                        <button id="decrease-qty" class="qty-btn">-</button>
+                                        <span id="item-quantity">1</span>
+                                        <button id="increase-qty" class="qty-btn">+</button>
+                                    </div>
+                                    <button id="add-to-cart" class="add-to-cart-btn">Add to Cart</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cart Section -->
+            <section class="cart-section">
+                <div id="cart-container">
+                    <div class="cart-header">
+                        <h3>Your Order</h3>
+                        <span id="cart-count" class="cart-count">0</span>
+                    </div>
+                    <div id="cart-items" class="cart-items">
+                        <p class="empty-cart">Your cart is empty</p>
+                    </div>
+                    <div class="cart-footer">
+                        <div class="cart-total">
+                            <strong>Total: $<span id="cart-total">0.00</span></strong>
+                        </div>
+                        <button id="checkout-btn" class="checkout-btn" disabled>Checkout</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <button id="voice-mode-btn" class="mode-btn active">Voice Mode</button>
+            <button id="touch-mode-btn" class="mode-btn">Touch Mode</button>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-spinner"></div>
+            <p>Processing your request...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="scripts/app.js"></script>
+    <script src="scripts/speech_manager.js"></script>
+    <script src="scripts/touch_manager.js"></script>
+    <script src="scripts/cart_manager.js"></script>
+    <script src="scripts/avatar_manager.js"></script>
+</body>
+</html>

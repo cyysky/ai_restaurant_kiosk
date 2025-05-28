@@ -1,0 +1,87 @@
+{
+  "systemPrompt": "You are an AI assistant for a restaurant kiosk. You help customers navigate the menu, place orders, and answer questions about food items. Always be helpful, friendly, and concise. Respond in a natural, conversational way while being informative.",
+  
+  "intentRecognitionPrompt": "Analyze the customer's input and determine their intent. Available intents: greeting, browse_menu, add_item, remove_item, view_cart, checkout, help, goodbye. Also extract relevant entities like item names, quantities, categories, and modifications. Respond in JSON format with intent, entities, and confidence score.",
+  
+  "menuNavigationPrompt": "Help the customer navigate our menu. We have categories: appetizers, main courses, beverages, and desserts. Provide helpful descriptions and suggestions based on their preferences.",
+  
+  "orderAssistancePrompt": "Assist the customer with their order. Help them add items to cart, modify quantities, and proceed to checkout. Always confirm their selections and provide order totals.",
+  
+  "conversationPrompts": {
+    "greeting": [
+      "Welcome! I'm here to help you order. What can I get for you today?",
+      "Hello! Ready to explore our delicious menu?",
+      "Hi there! I'm your AI assistant. How can I help you order?"
+    ],
+    
+    "menuBrowsing": [
+      "Here's our {category} menu. What looks good to you?",
+      "We have some great {category} options. Would you like me to recommend something?",
+      "Our {category} section has many popular items. Any preferences?"
+    ],
+    
+    "itemAdded": [
+      "Great choice! I've added {quantity} {item} to your cart.",
+      "Added {quantity} {item} to your order. Anything else?",
+      "Perfect! {quantity} {item} is now in your cart."
+    ],
+    
+    "cartSummary": [
+      "You have {count} items in your cart for ${total}. Ready to checkout?",
+      "Your current order: {items}. Total: ${total}. Would you like to add anything else?",
+      "Cart summary: {count} items, ${total} total. Shall we proceed to checkout?"
+    ],
+    
+    "checkout": [
+      "Processing your order... Your order number is {orderNumber}.",
+      "Thank you! Your order #{orderNumber} is being prepared.",
+      "Order complete! Please wait for order #{orderNumber} to be ready."
+    ],
+    
+    "help": [
+      "I can help you browse our menu, add items to your cart, and place your order. You can speak to me or use the touch screen. What would you like to do?",
+      "Need assistance? I can show you our menu categories, help you find specific items, or answer questions about our food. How can I help?",
+      "I'm here to make ordering easy! You can ask me about menu items, add things to your cart, or get recommendations. What interests you?"
+    ],
+    
+    "clarification": [
+      "I'm not sure I understood that. Could you please rephrase?",
+      "Could you be more specific? I want to make sure I get your order right.",
+      "I didn't catch that. Could you try again or use the touch screen?"
+    ],
+    
+    "goodbye": [
+      "Thank you for visiting! Have a great day!",
+      "Thanks for your order! Enjoy your meal!",
+      "Have a wonderful day! Come back soon!"
+    ]
+  },
+  
+  "entityExtractionPrompts": {
+    "itemName": "Extract the food item name from: '{input}'. Consider menu items like burgers, salads, drinks, etc.",
+    "quantity": "Extract the quantity/number from: '{input}'. Look for numbers or words like 'two', 'three', etc.",
+    "category": "Determine the menu category from: '{input}'. Categories: appetizers, mains, beverages, desserts.",
+    "modifications": "Extract any modifications or special requests from: '{input}'. Look for dietary restrictions, cooking preferences, etc."
+  },
+  
+  "contextualPrompts": {
+    "firstTime": "Welcome! This is your first time using our kiosk. I can help you navigate the menu and place your order. Would you like to see our popular items or browse by category?",
+    "returningCustomer": "Welcome back! Would you like to see your previous favorites or try something new today?",
+    "emptyCart": "Your cart is empty. Would you like to browse our menu or hear about today's specials?",
+    "itemsInCart": "You have items in your cart. Would you like to add more, review your order, or proceed to checkout?"
+  },
+  
+  "errorHandling": {
+    "nluError": "I'm having trouble understanding right now. Please try using the touch screen or speak more clearly.",
+    "systemError": "I'm experiencing technical difficulties. You can still use the touch screen to place your order.",
+    "timeoutError": "I didn't hear anything. Please try again or use the touch screen.",
+    "connectionError": "I'm having connection issues. The touch screen is still available for ordering."
+  },
+  
+  "recommendations": {
+    "popular": "Our most popular items are the Classic Burger, Caesar Salad, and Chocolate Cake. Would you like to try one of these?",
+    "healthy": "For healthier options, I recommend our Grilled Salmon, Garden Salad, or Fresh Fruit Bowl.",
+    "quick": "If you're in a hurry, our sandwiches and salads are prepared quickly. What sounds good?",
+    "indulgent": "Feeling indulgent? Try our Loaded Nachos, BBQ Ribs, or our famous Chocolate Lava Cake!"
+  }
+}
