@@ -39,7 +39,7 @@ A sophisticated offline AI kiosk system featuring a digital avatar, natural lang
 - **RAM**: Minimum 8GB (16GB recommended for Gemma 3:4B)
 - **Storage**: 10GB free space
 - **CPU**: Multi-core processor (Intel i5/AMD Ryzen 5 or better)
-- **GPU**: Optional but recommended for faster inference
+- **GPU**: NVIDIA GPU with at least 12GB VRAM strongly recommended for optimal performance, especially for local speech processing (Whisper) and LLM (Gemma 3:4B).
 
 ### Software Dependencies
 - **Node.js**: Version 18.0 or higher
@@ -194,6 +194,56 @@ node test/test_nlu.js
 node test/test_menu.js
 ```
 
+## Starting the System
+
+To run the complete AI Kiosk System, you need to start both the Python speech processing service and the main Electron application.
+
+### 1. Start the Python Speech Service
+
+The Python service handles Speech-to-Text (STT) and Text-to-Speech (TTS).
+
+**Prerequisites:**
+- Ensure Python 3.8+ is installed.
+- Install dependencies (if not already done during initial setup):
+  ```bash
+  cd python_service
+  pip install -r requirements.txt
+  cd ..
+  ```
+  Alternatively, you can use the startup script for installation:
+  ```bash
+  cd python_service
+  python start_service.py --install
+  cd ..
+  ```
+
+**Start the service:**
+Open a new terminal and run:
+```bash
+cd python_service
+python start_service.py
+```
+Or, for manual start (if `start_service.py` is not used):
+```bash
+cd python_service
+python main.py
+```
+This service typically runs on `http://localhost:8000`. Keep this terminal window open.
+
+### 2. Start the Main Kiosk Application
+
+Once the Python service is running, you can start the main Electron application.
+
+Open another new terminal and run:
+```bash
+# For production/kiosk mode (recommended for full experience)
+npm start
+
+# Or, for development mode
+npm run dev
+```
+
+The Kiosk application will connect to the Python service for speech functionalities. Ensure Ollama with Gemma 3:4B is also running as per the "Installation" section if you haven't started it yet.
 ## Usage
 
 ### Voice Interaction

@@ -4,7 +4,7 @@
   "description": "AI-powered kiosk system with digital avatar and offline capabilities",
   "main": "main.js",
   "scripts": {
-    "start": "electron . --dev --remote-debugging-port=9222 --enable-logging",
+    "start": "electron .",
     "dev": "electron . --dev",
     "debug": "electron . --dev --remote-debugging-port=9222 --enable-logging",
     "debug:remote": "electron . --dev --remote-debugging-port=9222",
