@@ -24,6 +24,9 @@ class KioskApp {
             // Set up event listeners
             this.setupEventListeners();
             
+            // Set up system event listeners
+            this.setupSystemEventListeners();
+            
             // Initialize all managers
             await this.speechManager.init();
             await this.touchManager.init();
@@ -95,6 +98,63 @@ class KioskApp {
         });
     }
 
+    setupSystemEventListeners() {
+        // Set up listeners for system events from main process
+        if (window.electronAPI) {
+            // Listen for Python service status updates
+            window.electronAPI.onPythonServiceStatus((status) => {
+                this.handlePythonServiceStatus(status);
+            });
+
+            // Listen for system notifications
+            window.electronAPI.onNotification((notification) => {
+                this.handleSystemNotification(notification);
+            });
+
+            // Listen for raw transcripts (for debugging/display)
+            window.electronAPI.onRawTranscript && window.electronAPI.onRawTranscript((data) => {
+                console.log('Raw transcript:', data);
+                document.getElementById('speech-text').textContent = `Heard: "${data.text}"`;
+            });
+
+            // Listen for processed interactions
+            window.electronAPI.onProcessedInteraction && window.electronAPI.onProcessedInteraction((data) => {
+                console.log('Processed interaction:', data);
+            });
+
+            console.log('System event listeners set up');
+        }
+    }
+
+    handlePythonServiceStatus(status) {
+        console.log('Python service status update:', status);
+        
+        // Update UI based on service status
+        const serviceIndicator = document.getElementById('service-status');
+        if (serviceIndicator) {
+            if (status.overall === 'healthy') {
+                serviceIndicator.textContent = '🟢 Speech Service Online';
+                serviceIndicator.className = 'service-status online';
+            } else if (status.overall === 'degraded') {
+                serviceIndicator.textContent = '🟡 Speech Service Degraded';
+                serviceIndicator.className = 'service-status degraded';
+            } else {
+                serviceIndicator.textContent = '🔴 Speech Service Offline';
+                serviceIndicator.className = 'service-status offline';
+            }
+        }
+    }
+
+    handleSystemNotification(notification) {
+        console.log('System notification:', notification);
+        
+        // Show notification to user if needed
+        if (notification.type === 'warning' || notification.type === 'error') {
+            // Could show a toast notification or update status
+            console.warn('System notification:', notification.message);
+        }
+    }
+
     setMode(mode) {
         this.currentMode = mode;
         
@@ -134,17 +194,14 @@ class KioskApp {
             this.updateVoiceButton(true);
             this.avatarManager.setListening(true);
             
-            const result = await this.speechManager.startListening();
-            
-            if (result && result.transcript) {
-                await this.processSpeechInput(result.transcript);
-            }
+            // Use the speech manager's startListening method
+            // The result will come through the speech recognition result handler
+            await this.speechManager.startListening();
             
         } catch (error) {
             console.error('Speech recognition error:', error);
             this.avatarManager.speak("Sorry, I couldn't hear you clearly. Please try again.");
             this.handleError('Speech recognition failed', error);
-        } finally {
             this.isListening = false;
             this.updateVoiceButton(false);
             this.avatarManager.setListening(false);
@@ -193,14 +250,14 @@ class KioskApp {
     async sendToNLU(text) {
         try {
             // Check if Electron API is available
-            if (!window.electronAPI || typeof window.electronAPI.invoke !== 'function') {
+            if (!window.electronAPI || typeof window.electronAPI.handleSpeechInput !== 'function') {
                 console.warn('Electron API not available, using fallback NLU processing');
                 // Fallback: Simple pattern matching for basic commands
                 return this.fallbackNLUProcessing(text);
             }
             
             // Send to Electron main process for NLU processing
-            const response = await window.electronAPI.invoke('speech-input', { text });
+            const response = await window.electronAPI.handleSpeechInput({ text });
             console.log('NLU response received:', response);
             return response;
         } catch (error) {
@@ -438,23 +495,23 @@ class KioskApp {
             console.log('Loading menu data...');
             
             // Check if Electron API is available
-            if (!window.electronAPI || typeof window.electronAPI.invoke !== 'function') {
+            if (!window.electronAPI || typeof window.electronAPI.handleMenuRequest !== 'function') {
                 console.warn('Electron API not available, loading sample menu data');
                 this.loadSampleMenuData();
                 return;
             }
             
             // Load menu data from backend
-            const rawMenuData = await window.electronAPI.invoke('menu-request', { action: 'get_menu' });
+            const rawMenuData = await window.electronAPI.handleMenuRequest({ action: 'get_menu' });
             console.log('Raw menu data received:', rawMenuData);
             
-            if (rawMenuData && rawMenuData.categories) {
+            if (rawMenuData && rawMenuData.data && rawMenuData.data.categories) {
                 // Transform the data structure from backend format to frontend format
-                // Backend: { "categories": { "appetizers": { "items": [...] } } }
+                // Backend: { "data": { "categories": { "appetizers": { "items": [...] } } } }
                 // Frontend: { "appetizers": [...] }
                 const transformedMenuData = {};
                 
-                for (const [categoryKey, categoryData] of Object.entries(rawMenuData.categories)) {
+                for (const [categoryKey, categoryData] of Object.entries(rawMenuData.data.categories)) {
                     if (categoryData && categoryData.items && Array.isArray(categoryData.items)) {
                         transformedMenuData[categoryKey] = categoryData.items;
                         console.log(`Transformed ${categoryKey}: ${categoryData.items.length} items`);
@@ -514,6 +571,24 @@ class KioskApp {
         return null;
     }
 
+    // Handle speech input from speech manager
+    handleSpeechInput(data) {
+        console.log('Speech input received from speech manager:', data);
+        
+        if (data.text) {
+            this.processSpeechInput(data.text).then(() => {
+                this.isListening = false;
+                this.updateVoiceButton(false);
+                this.avatarManager.setListening(false);
+            }).catch(error => {
+                console.error('Error processing speech input:', error);
+                this.isListening = false;
+                this.updateVoiceButton(false);
+                this.avatarManager.setListening(false);
+            });
+        }
+    }
+
     handleError(message, error) {
         console.error(message, error);
         this.updateSystemStatus('offline');
@@ -541,14 +616,5 @@ document.addEventListener('DOMContentLoaded', () => {
     window.kioskApp = new KioskApp();
 });
 
-// Handle Electron API availability
-if (typeof require !== 'undefined') {
-    const { ipcRenderer } = require('electron');
-    
-    // Set up Electron API bridge
-    window.electronAPI = {
-        invoke: (channel, data) => ipcRenderer.invoke(channel, data),
-        send: (channel, data) => ipcRenderer.send(channel, data),
-        on: (channel, callback) => ipcRenderer.on(channel, callback)
-    };
-}
+// The Electron API is now provided by the preload script
+// No need to set up the bridge here anymore

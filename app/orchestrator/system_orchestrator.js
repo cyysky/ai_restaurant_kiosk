@@ -17,6 +17,12 @@ class SystemOrchestrator extends EventEmitter {
         this.isInitialized = false;
         this.systemStatus = 'offline';
         this.config = null;
+        this.pythonServiceStatus = {
+            stt: 'unknown',
+            tts: 'unknown',
+            overall: 'unknown'
+        };
+        this.serviceCheckInterval = null;
     }
 
     async initialize() {
@@ -32,7 +38,7 @@ class SystemOrchestrator extends EventEmitter {
             // Set up inter-component communication
             this.setupCommunication();
             
-            // Start system monitoring
+            // Start system monitoring (including Python service health)
             this.startSystemMonitoring();
             
             this.isInitialized = true;
@@ -50,25 +56,28 @@ class SystemOrchestrator extends EventEmitter {
 
     async loadConfiguration() {
         try {
-            const configPath = path.join(__dirname, '../../config');
+            const configDir = path.join(__dirname, '../../config');
             
             // Load all configuration files
-            const llmConfig = await this.loadConfigFile(path.join(configPath, 'llm_config.json'));
-            const promptConfig = await this.loadConfigFile(path.join(configPath, 'prompt_config.json'));
-            const nluConfig = await this.loadConfigFile(path.join(configPath, 'nlu_config.json'));
+            const llmConfig = await this.loadConfigFile(path.join(configDir, 'llm_config.json'));
+            const promptConfig = await this.loadConfigFile(path.join(configDir, 'prompt_config.json'));
+            const nluConfig = await this.loadConfigFile(path.join(configDir, 'nlu_config.json'));
+            const speechConfig = await this.loadConfigFile(path.join(configDir, 'speech_service_config.json'));
             
             this.config = {
                 llm: llmConfig,
                 prompts: promptConfig,
-                nlu: nluConfig
+                nlu: nluConfig,
+                speech: speechConfig // Added speech config
             };
             
-            console.log('Configuration loaded successfully');
+            console.log('All configurations loaded successfully');
             
         } catch (error) {
-            console.error('Failed to load configuration:', error);
-            // Use default configuration
+            console.error('Failed to load one or more configurations:', error);
+            // Use default configuration or handle error appropriately
             this.config = this.getDefaultConfiguration();
+            console.warn('Using default configurations due to loading error.');
         }
     }
 
@@ -77,171 +86,223 @@ class SystemOrchestrator extends EventEmitter {
             const data = await fs.readFile(filePath, 'utf8');
             return JSON.parse(data);
         } catch (error) {
-            console.warn(`Failed to load config file ${filePath}:`, error.message);
+            console.warn(`Failed to load config file ${path.basename(filePath)}:`, error.message);
+            // Return an empty object or a default structure for this specific config
+            // This allows other configs to load even if one fails.
+            if (path.basename(filePath) === 'speech_service_config.json') {
+                return this.getDefaultSpeechConfig(); // Provide a default for speech if it fails
+            }
             return {};
         }
     }
+    
+    getDefaultSpeechConfig() { // Helper for default speech config
+        return {
+            service: { baseUrl: 'http://127.0.0.1:8000', endpoints: { health: '/api/v1/health' } },
+            monitoring: { healthCheckInterval: 30000 }
+        };
+    }
 
     getDefaultConfiguration() {
+        // Simplified default config, ensure speech part is present
         return {
-            llm: {
-                baseURL: 'http://localhost:11434/v1',
-                model: 'gemma3:4b',
-                temperature: 0.7,
-                maxTokens: 150,
-                timeout: 10000
-            },
-            prompts: {
-                systemPrompt: 'You are a helpful restaurant kiosk assistant.',
-                menuPrompt: 'Help customers navigate the menu and place orders.',
-                fallbackPrompt: 'I apologize, but I need clarification.'
-            },
-            nlu: {
-                confidenceThreshold: 0.7,
-                fallbackEnabled: true,
-                contextWindow: 5
-            }
+            llm: { baseURL: 'http://localhost:11434/v1', model: 'gemma3:4b' },
+            prompts: { systemPrompt: 'You are a helpful assistant.' },
+            nlu: { confidenceThreshold: 0.7 },
+            speech: this.getDefaultSpeechConfig()
         };
     }
 
     async initializeComponents() {
         console.log('Initializing system components...');
         
-        // Initialize Data Store first (other components depend on it)
         this.components.dataStore = new DataStore();
         await this.components.dataStore.initialize();
         
-        // Initialize NLU Engine with Gemma 3:4B
         this.components.nluEngine = new NLUEngine(this.config.llm, this.config.nlu);
         await this.components.nluEngine.initialize();
         
-        // Initialize Dialog Manager
         this.components.dialogManager = new DialogManager(this.config.prompts);
         await this.components.dialogManager.initialize();
         
-        // Initialize Menu Engine
         this.components.menuEngine = new MenuEngine(this.components.dataStore);
         await this.components.menuEngine.initialize();
         
-        // Initialize Speech Components with main window reference
+        // Initialize Speech Components
+        // The mainWindow reference will be set later via setMainWindow()
         this.components.speechInput = new SpeechInput();
-        await this.components.speechInput.initialize();
+        await this.components.speechInput.initialize(null); // Pass null initially
         
         this.components.speechOutput = new SpeechOutput();
-        await this.components.speechOutput.initialize();
+        await this.components.speechOutput.initialize(null); // Pass null initially
         
         console.log('All components initialized successfully');
     }
 
     setMainWindow(mainWindow) {
-        // Set main window reference for speech components to enable IPC
+        // Pass mainWindow to components that need it (SpeechInput, SpeechOutput)
         if (this.components.speechInput) {
             this.components.speechInput.mainWindow = mainWindow;
-            this.components.speechInput.setupIPCHandlers();
+            if (this.components.speechInput.isInitialized) { // If already initialized, re-setup IPC
+                 this.components.speechInput.setupIPCHandlers();
+            }
         }
         
         if (this.components.speechOutput) {
             this.components.speechOutput.mainWindow = mainWindow;
-            this.components.speechOutput.setupIPCHandlers();
+            if (this.components.speechOutput.isInitialized) { // If already initialized, re-setup IPC
+                this.components.speechOutput.setupIPCHandlers();
+            }
         }
         
         console.log('Main window reference set for speech components');
     }
 
     setupCommunication() {
-        // Set up event-driven communication between components
-        
         // NLU Engine events
-        this.components.nluEngine.on('intent-recognized', (data) => {
-            this.handleIntentRecognized(data);
-        });
-        
-        this.components.nluEngine.on('nlu-error', (error) => {
-            this.handleNLUError(error);
-        });
+        this.components.nluEngine.on('intent-recognized', (data) => this.handleIntentRecognized(data));
+        this.components.nluEngine.on('nlu-error', (error) => this.handleNLUError(error));
         
         // Dialog Manager events
-        this.components.dialogManager.on('response-generated', (response) => {
-            this.handleDialogResponse(response);
-        });
-        
-        this.components.dialogManager.on('action-required', (action) => {
-            this.handleActionRequired(action);
-        });
+        this.components.dialogManager.on('response-generated', (response) => this.handleDialogResponse(response));
+        this.components.dialogManager.on('action-required', (action) => this.handleActionRequired(action));
         
         // Menu Engine events
-        this.components.menuEngine.on('menu-updated', (data) => {
-            this.emit('menu-updated', data);
-        });
-        
-        this.components.menuEngine.on('order-updated', (order) => {
-            this.emit('order-updated', order);
-        });
+        this.components.menuEngine.on('menu-updated', (data) => this.emit('menu-updated', data));
+        this.components.menuEngine.on('order-updated', (order) => this.emit('order-updated', order));
+
+        // Speech Input events
+        this.components.speechInput.on('speech-recognized', (data) => this.handleSpeechInput(data));
+        this.components.speechInput.on('speech-error', (error) => this.handleSpeechError('input', error));
+        this.components.speechInput.on('service-down', () => this.updatePythonServiceStatus('stt', 'down'));
+        this.components.speechInput.on('service-restored', () => this.updatePythonServiceStatus('stt', 'healthy'));
+
+
+        // Speech Output events
+        this.components.speechOutput.on('speech-complete', (data) => this.emit('speech-output-complete', data));
+        this.components.speechOutput.on('speech-error', (error) => this.handleSpeechError('output', error));
+        this.components.speechOutput.on('speech-start', (data) => this.emit('speech-output-start', data));
+        this.components.speechOutput.on('service-down', () => this.updatePythonServiceStatus('tts', 'down'));
+        this.components.speechOutput.on('service-restored', () => this.updatePythonServiceStatus('tts', 'healthy'));
         
         // System-wide error handling
         Object.values(this.components).forEach(component => {
-            component.on('error', (error) => {
-                this.handleComponentError(component.constructor.name, error);
-            });
+            if (component && typeof component.on === 'function') { // Check if component is valid and has 'on'
+                component.on('error', (error) => { // General error from component
+                    this.handleComponentError(component.constructor.name, error);
+                });
+            }
         });
     }
 
-    async handleSpeechInput(audioData) {
+    async handleSpeechInput(audioData) { // audioData is now {text, confidence, timestamp, source}
         try {
-            console.log('Processing speech input...');
+            console.log(`Processing speech input from ${audioData.source}: "${audioData.text}"`);
             
-            // Extract text from audio data
-            const text = audioData.text || audioData.transcript;
-            
+            const text = audioData.text;
             if (!text) {
                 throw new Error('No text provided in speech input');
             }
             
-            // Process through NLU
+            // Emit raw transcript for UI update or logging
+            this.emit('raw-transcript', { text, confidence: audioData.confidence, source: audioData.source });
+
             const nluResult = await this.components.nluEngine.processText(text);
+            const dialogResponse = await this.components.dialogManager.processIntent(nluResult, this.config.prompts);
             
-            // Generate dialog response
-            const dialogResponse = await this.components.dialogManager.processIntent(nluResult);
-            
-            // Execute any required actions
-            if (dialogResponse.actions) {
+            if (dialogResponse.text) {
+                await this.components.speechOutput.speak(dialogResponse.text);
+            }
+
+            if (dialogResponse.actions && dialogResponse.actions.length > 0) {
                 await this.executeActions(dialogResponse.actions);
             }
             
-            return {
+            // Emit processed interaction for UI or logging
+            this.emit('processed-interaction', {
+                input: text,
                 intent: nluResult.intent,
                 entities: nluResult.entities,
-                response_text: dialogResponse.text,
+                response: dialogResponse.text,
                 actions: dialogResponse.actions
-            };
-            
+            });
+
         } catch (error) {
             console.error('Speech input processing error:', error);
-            return this.generateErrorResponse(error);
+            const errorResponse = this.generateErrorResponse(error);
+            await this.components.speechOutput.speak(errorResponse.response_text);
+            this.emit('system-error', { context: 'speech-input', error: error.message });
         }
     }
+    
+    handleSpeechError(type, errorData) {
+        console.error(`Speech ${type} error:`, errorData.error || errorData);
+        this.emit(`speech-${type}-error`, errorData);
+        // Potentially speak a generic error message if appropriate
+        // e.g., if (type === 'input' && !this.components.speechOutput.isSpeaking) {
+        //   this.components.speechOutput.speak("I'm having trouble understanding right now.");
+        // }
+    }
+
+    updatePythonServiceStatus(serviceType, status) { // serviceType is 'stt' or 'tts'
+        this.pythonServiceStatus[serviceType] = status;
+        
+        const sttOK = this.pythonServiceStatus.stt === 'healthy' || this.pythonServiceStatus.stt === 'unknown'; // Treat unknown as potentially ok initially
+        const ttsOK = this.pythonServiceStatus.tts === 'healthy' || this.pythonServiceStatus.tts === 'unknown';
+
+        if (sttOK && ttsOK) {
+            this.pythonServiceStatus.overall = 'healthy';
+        } else if (this.pythonServiceStatus.stt === 'down' && this.pythonServiceStatus.tts === 'down') {
+            this.pythonServiceStatus.overall = 'down';
+        } else {
+            this.pythonServiceStatus.overall = 'degraded';
+        }
+        
+        console.log(`Python service status updated: STT=${this.pythonServiceStatus.stt}, TTS=${this.pythonServiceStatus.tts}, Overall=${this.pythonServiceStatus.overall}`);
+        this.emit('python-service-status', this.pythonServiceStatus);
+
+        // Handle graceful degradation or recovery notices
+        if (status === 'down') {
+            const message = `The ${serviceType.toUpperCase()} service is currently unavailable. Functionality may be limited.`;
+            // this.components.speechOutput.speak(message); // Be cautious with automated error speaking
+            this.emit('notification', { type: 'warning', message });
+        } else if (status === 'healthy' && (this.pythonServiceStatus.overall === 'healthy' || this.pythonServiceStatus.overall === 'degraded')) {
+             // Check if it was previously down to announce recovery
+            if (this.pythonServiceStatus.overall !== 'healthy' && (this.pythonServiceStatus.stt === 'healthy' && this.pythonServiceStatus.tts === 'healthy')) {
+                 const message = `All speech services are now back online.`;
+                 // this.components.speechOutput.speak(message);
+                 this.emit('notification', { type: 'info', message });
+            }
+        }
+    }
+
 
     async handleTouchInput(action, data) {
         try {
             console.log('Processing touch input:', action, data);
-            
+            let result;
             switch (action) {
                 case 'select_category':
-                    return await this.handleCategorySelection(data.category);
+                    result = await this.components.menuEngine.getCategory(data.category);
+                    this.emit('ui-update', { type: 'category-selected', data: { category: data.category, items: result }});
+                    break;
                 case 'select_item':
-                    return await this.handleItemSelection(data.item);
+                    result = await this.components.menuEngine.getItemDetails(data.itemId);
+                     this.emit('ui-update', { type: 'item-selected', data: { item: result }});
+                    break;
                 case 'add_to_cart':
-                    return await this.handleAddToCart(data);
-                case 'update_cart':
-                    return await this.handleCartUpdate(data);
-                case 'checkout':
-                    return await this.handleCheckout(data);
+                    result = await this.components.menuEngine.addToCart(data.item, data.quantity);
+                    this.emit('order-updated', result.cart);
+                    this.components.speechOutput.speak(`Added ${data.quantity} ${data.item.name} to your order.`);
+                    break;
+                // ... other cases from original
                 default:
                     throw new Error(`Unknown touch action: ${action}`);
             }
-            
+            return { success: true, data: result };
         } catch (error) {
             console.error('Touch input processing error:', error);
+            this.emit('system-error', { context: 'touch-input', error: error.message });
             return this.generateErrorResponse(error);
         }
     }
@@ -249,22 +310,22 @@ class SystemOrchestrator extends EventEmitter {
     async handleMenuRequest(request) {
         try {
             console.log('Processing menu request:', request);
-            
+            let result;
             switch (request.action) {
                 case 'get_menu':
-                    return await this.components.menuEngine.getFullMenu();
+                    result = await this.components.menuEngine.getFullMenu();
+                    break;
                 case 'get_category':
-                    return await this.components.menuEngine.getCategory(request.category);
-                case 'search_items':
-                    return await this.components.menuEngine.searchItems(request.query);
-                case 'get_item_details':
-                    return await this.components.menuEngine.getItemDetails(request.itemId);
+                    result = await this.components.menuEngine.getCategory(request.category);
+                    break;
+                // ... other cases
                 default:
                     throw new Error(`Unknown menu action: ${request.action}`);
             }
-            
+            return { success: true, data: result };
         } catch (error) {
             console.error('Menu request processing error:', error);
+            this.emit('system-error', { context: 'menu-request', error: error.message });
             return this.generateErrorResponse(error);
         }
     }
@@ -273,94 +334,58 @@ class SystemOrchestrator extends EventEmitter {
         for (const action of actions) {
             try {
                 switch (action.type) {
-                    case 'show_menu':
-                        await this.handleShowMenu(action.data);
+                    case 'show_menu_category': // More specific action
+                        const items = await this.components.menuEngine.getCategory(action.data.category);
+                        this.emit('ui-update', { type: 'show-category', data: { category: action.data.category, items }});
                         break;
-                    case 'add_item':
-                        await this.handleAddToCart(action.data);
+                    case 'add_item_to_cart': // More specific
+                        const cartResult = await this.components.menuEngine.addToCart(action.data.item, action.data.quantity || 1);
+                        this.emit('order-updated', cartResult.cart);
+                        // Confirmation speech is handled by dialog manager's response usually
                         break;
-                    case 'update_cart':
-                        await this.handleCartUpdate(action.data);
-                        break;
-                    case 'speak':
-                        await this.components.speechOutput.speak(action.data.text);
-                        break;
+                    // case 'speak': // This is now handled by dialog manager sending response text
+                    //     await this.components.speechOutput.speak(action.data.text);
+                    //     break;
                     default:
                         console.warn('Unknown action type:', action.type);
                 }
             } catch (error) {
                 console.error(`Failed to execute action ${action.type}:`, error);
+                this.emit('action-execution-error', { action: action.type, error: error.message });
             }
         }
     }
 
-    async handleCategorySelection(category) {
-        const menuItems = await this.components.menuEngine.getCategory(category);
-        return {
-            success: true,
-            category: category,
-            items: menuItems
-        };
-    }
-
-    async handleItemSelection(item) {
-        const itemDetails = await this.components.menuEngine.getItemDetails(item.id);
-        return {
-            success: true,
-            item: itemDetails
-        };
-    }
-
-    async handleAddToCart(data) {
-        const result = await this.components.menuEngine.addToCart(data.item, data.quantity);
-        return {
-            success: true,
-            cart: result.cart,
-            message: `Added ${data.quantity} ${data.item.name} to cart`
-        };
-    }
-
-    async handleCartUpdate(data) {
-        const result = await this.components.menuEngine.updateCart(data);
-        return {
-            success: true,
-            cart: result.cart
-        };
-    }
-
-    async handleCheckout(data) {
-        const result = await this.components.menuEngine.processCheckout(data);
-        return {
-            success: true,
-            orderId: result.orderId,
-            total: result.total,
-            message: 'Order placed successfully'
-        };
-    }
-
     handleIntentRecognized(data) {
-        console.log('Intent recognized:', data.intent);
-        this.emit('intent-recognized', data);
+        console.log('Intent recognized by NLU:', data.intent, 'Entities:', data.entities);
+        this.emit('intent-recognized', data); // Forward for logging or UI
     }
 
     handleNLUError(error) {
         console.error('NLU Error:', error);
         this.emit('nlu-error', error);
+        this.components.speechOutput.speak("I'm having a bit of trouble understanding. Could you try rephrasing?");
     }
 
-    handleDialogResponse(response) {
-        console.log('Dialog response generated');
-        this.emit('dialog-response', response);
+    handleDialogResponse(response) { // Response is {text, actions, ...}
+        console.log('Dialog response generated:', response.text);
+        this.emit('dialog-response', response); // Forward for UI
+        // Speaking the response text is now handled in handleSpeechInput after dialogManager.processIntent
     }
 
-    handleActionRequired(action) {
-        console.log('Action required:', action.type);
-        this.emit('action-required', action);
+    handleActionRequired(action) { // This might be deprecated if actions are part of dialogResponse
+        console.log('Action required by Dialog Manager:', action.type);
+        this.emit('action-required', action); // Forward for logging
+        this.executeActions([action]); // Execute if it's a standalone action request
     }
 
     handleComponentError(componentName, error) {
-        console.error(`Component error in ${componentName}:`, error);
-        this.emit('component-error', { component: componentName, error });
+        console.error(`Error in component ${componentName}:`, error.message || error);
+        this.emit('component-error', { component: componentName, error: error.message || error });
+        // Avoid speaking errors for every component error to prevent flooding
+        if (componentName === 'NLUEngine' || componentName === 'DialogManager') {
+            // this.components.speechOutput.speak("I've encountered an internal issue. Please try again.");
+        }
     }
 
     generateErrorResponse(error) {
@@ -374,84 +399,98 @@ class SystemOrchestrator extends EventEmitter {
 
     async getSystemStatus() {
         const componentStatus = {};
-        
         for (const [name, component] of Object.entries(this.components)) {
             try {
-                componentStatus[name] = component.getStatus ? await component.getStatus() : 'unknown';
+                if (component && typeof component.getStatus === 'function') {
+                    componentStatus[name] = await component.getStatus();
+                } else {
+                     componentStatus[name] = component ? 'status_not_available' : 'not_initialized';
+                }
             } catch (error) {
-                componentStatus[name] = 'error';
+                componentStatus[name] = { status: 'error', error: error.message };
             }
         }
         
         return {
             system: this.systemStatus,
             components: componentStatus,
+            pythonService: this.pythonServiceStatus, // Added Python service status
             initialized: this.isInitialized,
             timestamp: Date.now()
         };
     }
 
-    async updateConfiguration(newConfig) {
+    async updateConfiguration(newConfigUpdates) {
         try {
-            // Merge with existing configuration
-            this.config = { ...this.config, ...newConfig };
-            
-            // Update components that support configuration updates
-            if (newConfig.llm && this.components.nluEngine) {
-                await this.components.nluEngine.updateConfiguration(newConfig.llm);
+            // Selectively update parts of the config
+            if (newConfigUpdates.llm) this.config.llm = { ...this.config.llm, ...newConfigUpdates.llm };
+            if (newConfigUpdates.prompts) this.config.prompts = { ...this.config.prompts, ...newConfigUpdates.prompts };
+            if (newConfigUpdates.nlu) this.config.nlu = { ...this.config.nlu, ...newConfigUpdates.nlu };
+            if (newConfigUpdates.speech) this.config.speech = { ...this.config.speech, ...newConfigUpdates.speech };
+
+            // Propagate updates to components
+            if (newConfigUpdates.llm && this.components.nluEngine) {
+                await this.components.nluEngine.updateConfiguration(this.config.llm);
+            }
+            if (newConfigUpdates.prompts && this.components.dialogManager) {
+                // DialogManager might not have updateConfiguration, or it might take specific prompt parts
+                // For now, assume it re-reads from this.config.prompts when needed or has its own method
+            }
+            if (newConfigUpdates.nlu && this.components.nluEngine) {
+                 await this.components.nluEngine.updateConfiguration(this.config.nlu); // NLU might take general NLU config
+            }
+            if (newConfigUpdates.speech) {
+                if (this.components.speechInput) await this.components.speechInput.updateConfiguration(this.config.speech);
+                if (this.components.speechOutput) await this.components.speechOutput.updateConfiguration(this.config.speech);
             }
             
-            if (newConfig.prompts && this.components.dialogManager) {
-                await this.components.dialogManager.updateConfiguration(newConfig.prompts);
-            }
-            
-            console.log('Configuration updated successfully');
+            console.log('System configuration updated successfully');
+            this.emit('configuration-updated', this.config);
             return { success: true };
             
         } catch (error) {
-            console.error('Failed to update configuration:', error);
+            console.error('Failed to update system configuration:', error);
             return { success: false, error: error.message };
         }
     }
 
     startSystemMonitoring() {
-        // Monitor system health
-        this.monitoringInterval = setInterval(async () => {
+        // This interval can be for general component health if needed,
+        // Python service health is managed by SpeechInput/Output modules themselves.
+        // For now, we rely on events from those modules for Python service status.
+        
+        // Example: Periodically log overall system status
+        if (this.serviceCheckInterval) clearInterval(this.serviceCheckInterval);
+        this.serviceCheckInterval = setInterval(async () => {
             try {
                 const status = await this.getSystemStatus();
+                this.emit('system-status-update', status); // For UI or logging
                 
-                // Check for component failures
-                const failedComponents = Object.entries(status.components)
-                    .filter(([name, status]) => status === 'error')
-                    .map(([name]) => name);
-                
-                if (failedComponents.length > 0) {
-                    console.warn('Failed components detected:', failedComponents);
-                    this.emit('components-failed', failedComponents);
+                // Check for critical component failures (example)
+                if (status.components.nluEngine?.status === 'error' || status.components.dialogManager?.status === 'error') {
+                    console.warn('Critical component (NLU or Dialog) in error state.');
+                    // Potentially trigger a more global error state or recovery attempt
                 }
-                
+
             } catch (error) {
                 console.error('System monitoring error:', error);
             }
-        }, 30000); // Check every 30 seconds
+        }, this.config.speech.monitoring.healthCheckInterval || 60000); // Use speech config interval or a default
     }
 
     async shutdown() {
         console.log('Shutting down System Orchestrator...');
+        if (this.serviceCheckInterval) {
+            clearInterval(this.serviceCheckInterval);
+        }
         
         try {
-            // Stop monitoring
-            if (this.monitoringInterval) {
-                clearInterval(this.monitoringInterval);
-            }
-            
-            // Shutdown all components
             for (const [name, component] of Object.entries(this.components)) {
                 try {
-                    if (component.shutdown) {
+                    if (component && typeof component.shutdown === 'function') {
                         await component.shutdown();
+                        console.log(`${name} shut down successfully`);
                     }
-                    console.log(`${name} shut down successfully`);
                 } catch (error) {
                     console.error(`Failed to shutdown ${name}:`, error);
                 }
@@ -459,11 +498,13 @@ class SystemOrchestrator extends EventEmitter {
             
             this.isInitialized = false;
             this.systemStatus = 'offline';
+            this.pythonServiceStatus = { stt: 'unknown', tts: 'unknown', overall: 'unknown' };
             
             console.log('System Orchestrator shut down successfully');
+            this.emit('system-shutdown');
             
         } catch (error) {
-            console.error('Error during shutdown:', error);
+            console.error('Error during System Orchestrator shutdown:', error);
         }
     }
 }

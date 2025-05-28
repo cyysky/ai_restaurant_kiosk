@@ -1,0 +1,52 @@
+{
+  "service": {
+    "baseUrl": "http://127.0.0.1:8000",
+    "endpoints": {
+      "health": "/api/v1/health",
+      "stt": "/api/v1/speech/transcribe",
+      "tts": "/api/v1/speech/synthesize",
+      "voices": "/api/v1/speech/voices"
+    },
+    "timeout": 30000,
+    "retryAttempts": 3,
+    "retryDelay": 1000
+  },
+  "audio": {
+    "sampleRate": 16000,
+    "channels": 1,
+    "format": "wav",
+    "maxRecordingDuration": 30000,
+    "silenceThreshold": 0.01,
+    "autoStopDelay": 3000
+  },
+  "stt": {
+    "language": "auto",
+    "confidenceThreshold": 0.7,
+    "enableVAD": true
+  },
+  "tts": {
+    "defaultVoice": "af_heart",
+    "speed": 1.0,
+    "pitch": 1.0,
+    "volume": 1.0,
+    "availableVoices": [
+      "af_heart",
+      "af_sky",
+      "af_bella",
+      "af_sarah",
+      "am_adam",
+      "am_michael"
+    ]
+  },
+  "fallback": {
+    "enableWebSpeechAPI": true,
+    "webSpeechLanguage": "en-US",
+    "fallbackOnServiceError": true,
+    "maxServiceDowntime": 60000
+  },
+  "monitoring": {
+    "healthCheckInterval": 30000,
+    "enablePerformanceLogging": true,
+    "logAudioMetrics": false
+  }
+}

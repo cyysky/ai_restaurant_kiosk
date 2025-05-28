@@ -52,9 +52,10 @@ class KioskApplication {
       kiosk: !this.isDev,
       frame: this.isDev,
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false,
-        enableRemoteModule: true
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
       },
       show: false
     });
@@ -158,6 +159,74 @@ class KioskApplication {
     // Handle configuration updates
     ipcMain.handle('update-config', async (event, config) => {
       return await this.orchestrator.updateConfiguration(config);
+    });
+
+    // Handle fallback voice requests from renderer
+    ipcMain.handle('get-fallback-voices', async (event) => {
+      // This will be handled by the renderer's speech manager
+      return [];
+    });
+
+    // Set up orchestrator event forwarding to renderer
+    this.setupEventForwarding();
+  }
+
+  setupEventForwarding() {
+    if (!this.orchestrator) return;
+
+    // Forward system events to renderer
+    this.orchestrator.on('system-ready', () => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('system-ready');
+      }
+    });
+
+    this.orchestrator.on('system-error', (error) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('system-error', error);
+      }
+    });
+
+    this.orchestrator.on('menu-updated', (data) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('menu-updated', data);
+      }
+    });
+
+    this.orchestrator.on('order-updated', (order) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('order-updated', order);
+      }
+    });
+
+    this.orchestrator.on('ui-update', (update) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('ui-update', update);
+      }
+    });
+
+    this.orchestrator.on('python-service-status', (status) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('python-service-status', status);
+      }
+    });
+
+    this.orchestrator.on('notification', (notification) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('notification', notification);
+      }
+    });
+
+    this.orchestrator.on('raw-transcript', (data) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('raw-transcript', data);
+      }
+    });
+
+    this.orchestrator.on('processed-interaction', (data) => {
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('processed-interaction', data);
+      }
     });
   }
 }

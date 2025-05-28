@@ -1,44 +1,68 @@
-// Speech Manager - Handles speech recognition and synthesis
+// Speech Manager - Handles speech recognition and synthesis with Python service integration
 class SpeechManager {
     constructor(app) {
         this.app = app;
+        this.isListening = false;
+        this.isSpeaking = false;
+        this.isSupported = false;
+        this.serviceAvailable = false;
+        this.config = null;
+        
+        // Web Audio API components
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.audioContext = null;
+        this.stream = null;
+        
+        // Service monitoring
+        this.healthCheckInterval = null;
+        this.lastHealthCheck = 0;
+        this.serviceDownSince = null;
+        
+        // Fallback Web Speech API
         this.recognition = null;
         this.synthesis = window.speechSynthesis;
-        this.isListening = false;
-        this.isSupported = false;
         this.currentVoice = null;
-        this.recognitionTimeout = null;
+        
+        // Audio processing
+        this.recordingTimeout = null;
+        this.silenceDetectionTimeout = null;
     }
 
     async init() {
-        console.log('Initializing Speech Manager...');
+        // Set up IPC communication with main process
+        this.setupIPCHandlers();
+        
+        console.log('Initializing Speech Manager with Python service integration...');
         
         try {
-            // Check for speech recognition support
-            this.isSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+            // Load configuration
+            await this.loadConfiguration();
+            
+            // Check for basic audio support
+            this.isSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
             
             if (!this.isSupported) {
-                console.warn('Speech recognition not supported in this browser');
+                console.warn('Media devices not supported in this browser');
                 return;
             }
 
-            // Initialize speech recognition
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            this.recognition = new SpeechRecognition();
+            // Initialize audio context
+            await this.initializeAudioContext();
             
-            // Configure recognition settings
-            this.recognition.continuous = false;
-            this.recognition.interimResults = true;
-            this.recognition.lang = 'en-US';
-            this.recognition.maxAlternatives = 1;
+            // Check Python service availability
+            await this.checkServiceHealth();
             
-            // Set up event handlers
-            this.setupRecognitionHandlers();
+            // Initialize fallback if needed
+            if (!this.serviceAvailable && this.config.fallback.enableWebSpeechAPI) {
+                await this.initializeFallback();
+            }
             
-            // Initialize text-to-speech
-            await this.initializeTTS();
+            // Start health monitoring
+            this.startHealthMonitoring();
             
             console.log('Speech Manager initialized successfully');
+            console.log(`Service available: ${this.serviceAvailable}, Fallback ready: ${!!this.recognition}`);
             
         } catch (error) {
             console.error('Failed to initialize Speech Manager:', error);
@@ -46,9 +70,140 @@ class SpeechManager {
         }
     }
 
-    setupRecognitionHandlers() {
+    async loadConfiguration() {
+        try {
+            console.log('Attempting to load config from: ./config/speech_service_config.json');
+            console.log('Current location:', window.location.href);
+            const response = await fetch('../../config/speech_service_config.json');
+            console.log('Config fetch response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            this.config = await response.json();
+            console.log('Speech service configuration loaded successfully:', this.config);
+        } catch (error) {
+            console.warn('Failed to load speech service config, using defaults:', error);
+            console.log('Error details:', error.message);
+            this.config = this.getDefaultConfig();
+            console.log('Using default config:', this.config);
+        }
+    }
+
+    getDefaultConfig() {
+        return {
+            service: {
+                baseUrl: 'http://127.0.0.1:8000',
+                endpoints: {
+                    health: '/api/v1/health',
+                    stt: '/api/v1/speech/transcribe',
+                    tts: '/api/v1/speech/synthesize',
+                    voices: '/api/v1/speech/voices'
+                },
+                timeout: 30000,
+                retryAttempts: 3
+            },
+            audio: {
+                maxRecordingDuration: 30000,
+                autoStopDelay: 3000
+            },
+            stt: {
+                language: 'auto',
+                confidenceThreshold: 0.7
+            },
+            tts: {
+                defaultVoice: 'af_heart',
+                speed: 1.0,
+                pitch: 1.0
+            },
+            fallback: {
+                enableWebSpeechAPI: true,
+                webSpeechLanguage: 'en-US'
+            },
+            monitoring: {
+                healthCheckInterval: 30000
+            }
+        };
+    }
+
+    async initializeAudioContext() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('Audio context initialized');
+        } catch (error) {
+            console.error('Failed to initialize audio context:', error);
+            throw error;
+        }
+    }
+
+    async checkServiceHealth() {
+        try {
+            console.log('Checking service health at:', `${this.config.service.baseUrl}${this.config.service.endpoints.health}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            const response = await fetch(`${this.config.service.baseUrl}${this.config.service.endpoints.health}`, {
+                signal: controller.signal,
+                method: 'GET'
+            });
+            
+            clearTimeout(timeoutId);
+            console.log('Health check response status:', response.status);
+            
+            if (response.ok) {
+                const health = await response.json();
+                console.log('Health check response data:', health);
+                this.serviceAvailable = health.status === 'healthy';
+                this.lastHealthCheck = Date.now();
+                
+                if (this.serviceDownSince && this.serviceAvailable) {
+                    console.log('Python speech service is back online');
+                    this.serviceDownSince = null;
+                }
+            } else {
+                this.serviceAvailable = false;
+                console.warn('Health check failed with status:', response.status);
+            }
+        } catch (error) {
+            console.warn('Python speech service health check failed:', error.message);
+            console.log('Full error object:', error);
+            this.serviceAvailable = false;
+            
+            if (!this.serviceDownSince) {
+                this.serviceDownSince = Date.now();
+                console.warn('Python speech service appears to be down');
+            }
+        }
+        
+        console.log('Service available after health check:', this.serviceAvailable);
+        return this.serviceAvailable;
+    }
+
+    async initializeFallback() {
+        try {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                this.recognition = new SpeechRecognition();
+                
+                this.recognition.continuous = false;
+                this.recognition.interimResults = true;
+                this.recognition.lang = this.config.fallback.webSpeechLanguage;
+                this.recognition.maxAlternatives = 1;
+                
+                this.setupFallbackHandlers();
+                
+                // Initialize TTS voices
+                await this.initializeTTSVoices();
+                
+                console.log('Web Speech API fallback initialized');
+            }
+        } catch (error) {
+            console.error('Failed to initialize Web Speech API fallback:', error);
+        }
+    }
+
+    setupFallbackHandlers() {
         this.recognition.onstart = () => {
-            console.log('Speech recognition started');
+            console.log('Fallback speech recognition started');
             this.isListening = true;
         };
 
@@ -66,62 +221,33 @@ class SpeechManager {
                 }
             }
 
-            // Update UI with interim results
             if (interimTranscript) {
-                document.getElementById('speech-text').textContent = `Listening: ${interimTranscript}`;
+                this.updateUI(`Listening: ${interimTranscript}`);
             }
 
-            // Process final result
             if (finalTranscript) {
-                this.handleRecognitionResult(finalTranscript.trim());
+                this.handleRecognitionResult(finalTranscript.trim(), event.results[0][0].confidence || 0.8);
             }
         };
 
         this.recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
+            console.error('Fallback speech recognition error:', event.error);
             this.isListening = false;
-            
-            let errorMessage = 'Speech recognition error';
-            
-            switch (event.error) {
-                case 'no-speech':
-                    errorMessage = "I didn't hear anything. Please try again.";
-                    break;
-                case 'audio-capture':
-                    errorMessage = "Microphone not available. Please check your microphone.";
-                    break;
-                case 'not-allowed':
-                    errorMessage = "Microphone access denied. Please allow microphone access.";
-                    break;
-                case 'network':
-                    errorMessage = "Network error. Speech recognition is working offline.";
-                    break;
-                default:
-                    errorMessage = `Speech recognition error: ${event.error}`;
-            }
-            
-            this.app.handleError('Speech recognition error', new Error(errorMessage));
+            this.handleRecognitionError(new Error(`Speech recognition error: ${event.error}`));
         };
 
         this.recognition.onend = () => {
-            console.log('Speech recognition ended');
+            console.log('Fallback speech recognition ended');
             this.isListening = false;
-            
-            if (this.recognitionTimeout) {
-                clearTimeout(this.recognitionTimeout);
-                this.recognitionTimeout = null;
-            }
         };
     }
 
-    async initializeTTS() {
-        // Wait for voices to load
+    async initializeTTSVoices() {
         return new Promise((resolve) => {
             const loadVoices = () => {
                 const voices = this.synthesis.getVoices();
                 
                 if (voices.length > 0) {
-                    // Prefer English voices
                     this.currentVoice = voices.find(voice => 
                         voice.lang.startsWith('en') && voice.localService
                     ) || voices.find(voice => 
@@ -131,7 +257,6 @@ class SpeechManager {
                     console.log('TTS voice selected:', this.currentVoice?.name);
                     resolve();
                 } else {
-                    // Voices not loaded yet, try again
                     setTimeout(loadVoices, 100);
                 }
             };
@@ -144,11 +269,17 @@ class SpeechManager {
         });
     }
 
-    async startListening() {
-        if (!this.isSupported) {
-            throw new Error('Speech recognition not supported');
+    startHealthMonitoring() {
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
         }
+        
+        this.healthCheckInterval = setInterval(async () => {
+            await this.checkServiceHealth();
+        }, this.config.monitoring.healthCheckInterval);
+    }
 
+    async startListening() {
         if (this.isListening) {
             console.log('Already listening');
             return;
@@ -156,145 +287,590 @@ class SpeechManager {
 
         try {
             // Stop any ongoing speech synthesis
-            this.synthesis.cancel();
+            this.stopSpeaking();
             
-            // Start recognition with timeout
-            this.recognition.start();
-            
-            // Set timeout to automatically stop listening
-            this.recognitionTimeout = setTimeout(() => {
-                if (this.isListening) {
-                    this.stopListening();
-                }
-            }, 10000); // 10 second timeout
-            
-            return new Promise((resolve, reject) => {
-                this.recognitionResolve = resolve;
-                this.recognitionReject = reject;
-            });
+            // Try Python service first
+            if (this.serviceAvailable) {
+                await this.startPythonServiceListening();
+            } else if (this.recognition && this.config.fallback.enableWebSpeechAPI) {
+                await this.startFallbackListening();
+            } else {
+                throw new Error('No speech recognition service available');
+            }
             
         } catch (error) {
             console.error('Failed to start speech recognition:', error);
+            this.handleRecognitionError(error);
+            throw error;
+        }
+    }
+
+    async startPythonServiceListening() {
+        try {
+            // Request microphone access
+            this.stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    sampleRate: this.config.audio.sampleRate || 16000,
+                    channelCount: this.config.audio.channels || 1,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
+            
+            // Set up MediaRecorder
+            const options = {
+                mimeType: 'audio/webm;codecs=opus'
+            };
+            
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'audio/webm';
+            }
+            
+            this.mediaRecorder = new MediaRecorder(this.stream, options);
+            this.audioChunks = [];
+            
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.audioChunks.push(event.data);
+                }
+            };
+            
+            this.mediaRecorder.onstop = async () => {
+                await this.processRecordedAudio();
+            };
+            
+            this.mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                this.handleRecognitionError(event.error);
+            };
+            
+            // Start recording
+            this.mediaRecorder.start(100); // Collect data every 100ms
+            this.isListening = true;
+            
+            // Send status update to main process
+            if (typeof window !== 'undefined' && window.electronAPI) {
+                window.electronAPI.sendSpeechRecognitionStatus({
+                    listening: true
+                });
+            }
+            
+            this.updateUI('Listening...');
+            
+            // Set auto-stop timeout
+            this.recordingTimeout = setTimeout(() => {
+                if (this.isListening) {
+                    this.stopListening();
+                }
+            }, this.config.audio.maxRecordingDuration);
+            
+            console.log('Python service speech recognition started');
+            
+        } catch (error) {
+            console.error('Failed to start Python service listening:', error);
+            throw error;
+        }
+    }
+
+    async startFallbackListening() {
+        try {
+            this.recognition.start();
+            
+            this.recordingTimeout = setTimeout(() => {
+                if (this.isListening) {
+                    this.stopListening();
+                }
+            }, this.config.audio.maxRecordingDuration);
+            
+            console.log('Fallback speech recognition started');
+            
+        } catch (error) {
+            console.error('Failed to start fallback listening:', error);
             throw error;
         }
     }
 
     stopListening() {
-        if (this.recognition && this.isListening) {
-            this.recognition.stop();
+        if (!this.isListening) {
+            return;
         }
-        
-        if (this.recognitionTimeout) {
-            clearTimeout(this.recognitionTimeout);
-            this.recognitionTimeout = null;
+
+        try {
+            if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                this.mediaRecorder.stop();
+            }
+            
+            if (this.recognition) {
+                this.recognition.stop();
+            }
+            
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+            
+            if (this.recordingTimeout) {
+                clearTimeout(this.recordingTimeout);
+                this.recordingTimeout = null;
+            }
+            
+            this.isListening = false;
+            
+            // Send status update to main process
+            if (typeof window !== 'undefined' && window.electronAPI) {
+                window.electronAPI.sendSpeechRecognitionStatus({
+                    listening: false
+                });
+            }
+            
+            this.updateUI('');
+            
+            console.log('Speech recognition stopped');
+            
+        } catch (error) {
+            console.error('Error stopping speech recognition:', error);
         }
-        
-        this.isListening = false;
     }
 
-    handleRecognitionResult(transcript) {
-        console.log('Speech recognition result:', transcript);
-        
-        if (this.recognitionResolve) {
-            this.recognitionResolve({ transcript });
-            this.recognitionResolve = null;
-            this.recognitionReject = null;
-        }
-    }
-
-    speak(text, options = {}) {
-        return new Promise((resolve, reject) => {
-            if (!text) {
-                resolve();
+    async processRecordedAudio() {
+        try {
+            if (this.audioChunks.length === 0) {
+                console.warn('No audio data recorded');
                 return;
             }
+            
+            // Create audio blob
+            const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+            
+            // Convert to WAV if needed
+            const wavBlob = await this.convertToWav(audioBlob);
+            
+            // Send to Python service
+            await this.transcribeAudio(wavBlob);
+            
+        } catch (error) {
+            console.error('Error processing recorded audio:', error);
+            this.handleRecognitionError(error);
+        } finally {
+            this.audioChunks = [];
+        }
+    }
 
-            // Cancel any ongoing speech
-            this.synthesis.cancel();
+    async convertToWav(audioBlob) {
+        try {
+            // Convert WebM/Opus to WAV format for Python service
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            // Convert to WAV format
+            const wavBuffer = this.audioBufferToWav(audioBuffer);
+            return new Blob([wavBuffer], { type: 'audio/wav' });
+        } catch (error) {
+            console.warn('WAV conversion failed, using original blob:', error);
+            return audioBlob;
+        }
+    }
 
-            const utterance = new SpeechSynthesisUtterance(text);
+    audioBufferToWav(buffer) {
+        const length = buffer.length;
+        const numberOfChannels = buffer.numberOfChannels;
+        const sampleRate = buffer.sampleRate;
+        const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+        const view = new DataView(arrayBuffer);
+        
+        // WAV header
+        const writeString = (offset, string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+        
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numberOfChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+        view.setUint16(32, numberOfChannels * 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, length * numberOfChannels * 2, true);
+        
+        // Convert float samples to 16-bit PCM
+        let offset = 44;
+        for (let i = 0; i < length; i++) {
+            for (let channel = 0; channel < numberOfChannels; channel++) {
+                const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                offset += 2;
+            }
+        }
+        
+        return arrayBuffer;
+    }
+
+    async transcribeAudio(audioBlob) {
+        try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'audio.wav');
+            formData.append('language', this.config.stt.language);
             
-            // Configure utterance
-            utterance.voice = this.currentVoice;
-            utterance.rate = options.rate || 1.0;
-            utterance.pitch = options.pitch || 1.0;
-            utterance.volume = options.volume || 1.0;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.config.service.timeout);
             
-            // Set up event handlers
-            utterance.onstart = () => {
-                console.log('TTS started:', text);
+            const response = await fetch(`${this.config.service.baseUrl}${this.config.service.endpoints.stt}`, {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.handleRecognitionResult(result.text, result.confidence);
+            } else {
+                const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(`Transcription failed: ${error.error || response.statusText}`);
+            }
+            
+        } catch (error) {
+            console.error('Error transcribing audio:', error);
+            
+            // Try fallback if service error and fallback enabled
+            if (this.config.fallback.fallbackOnServiceError && this.recognition) {
+                console.log('Falling back to Web Speech API due to service error');
+                this.serviceAvailable = false;
+                await this.startFallbackListening();
+            } else {
+                this.handleRecognitionError(error);
+            }
+        }
+    }
+
+    async speak(text, options = {}) {
+        if (!text) {
+            return Promise.resolve();
+        }
+
+        try {
+            // Stop any ongoing speech
+            this.stopSpeaking();
+            
+            // Try Python service first
+            if (this.serviceAvailable) {
+                await this.speakWithPythonService(text, options);
+            } else if (this.synthesis && this.config.fallback.enableWebSpeechAPI) {
+                await this.speakWithFallback(text, options);
+            } else {
+                throw new Error('No speech synthesis service available');
+            }
+            
+        } catch (error) {
+            console.error('Failed to speak text:', error);
+            
+            // Try fallback if service error
+            if (this.serviceAvailable && this.synthesis && this.config.fallback.fallbackOnServiceError) {
+                console.log('Falling back to Web Speech API for TTS');
+                await this.speakWithFallback(text, options);
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    async speakWithPythonService(text, options = {}) {
+        try {
+            this.isSpeaking = true;
+            
+            const requestBody = {
+                text: text,
+                voice: options.voice || this.config.tts.defaultVoice,
+                speed: options.speed || this.config.tts.speed,
+                pitch: options.pitch || this.config.tts.pitch
             };
             
-            utterance.onend = () => {
-                console.log('TTS ended');
-                resolve();
-            };
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.config.service.timeout);
             
-            utterance.onerror = (event) => {
-                console.error('TTS error:', event.error);
-                reject(new Error(`TTS error: ${event.error}`));
-            };
+            const response = await fetch(`${this.config.service.baseUrl}${this.config.service.endpoints.tts}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal
+            });
             
-            // Speak the text
-            this.synthesis.speak(utterance);
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                const audioBlob = await response.blob();
+                await this.playAudioBlob(audioBlob);
+            } else {
+                const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(`Speech synthesis failed: ${error.error || response.statusText}`);
+            }
+            
+        } catch (error) {
+            this.isSpeaking = false;
+            throw error;
+        }
+    }
+
+    async speakWithFallback(text, options = {}) {
+        return new Promise((resolve, reject) => {
+            try {
+                this.isSpeaking = true;
+                
+                // Cancel any ongoing speech
+                this.synthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                // Configure utterance
+                utterance.voice = this.currentVoice;
+                utterance.rate = options.rate || this.config.tts.speed;
+                utterance.pitch = options.pitch || this.config.tts.pitch;
+                utterance.volume = options.volume || 1.0;
+                
+                utterance.onstart = () => {
+                    console.log('Fallback TTS started:', text.substring(0, 50));
+                };
+                
+                utterance.onend = () => {
+                    console.log('Fallback TTS ended');
+                    this.isSpeaking = false;
+                    resolve();
+                };
+                
+                utterance.onerror = (event) => {
+                    console.error('Fallback TTS error:', event.error);
+                    this.isSpeaking = false;
+                    reject(new Error(`TTS error: ${event.error}`));
+                };
+                
+                this.synthesis.speak(utterance);
+                
+            } catch (error) {
+                this.isSpeaking = false;
+                reject(error);
+            }
+        });
+    }
+
+    async playAudioBlob(audioBlob) {
+        return new Promise((resolve, reject) => {
+            try {
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.onloadeddata = () => {
+                    console.log('Python service TTS audio loaded');
+                };
+                
+                audio.onended = () => {
+                    console.log('Python service TTS ended');
+                    this.isSpeaking = false;
+                    URL.revokeObjectURL(audioUrl);
+                    resolve();
+                };
+                
+                audio.onerror = (event) => {
+                    console.error('Audio playback error:', event);
+                    this.isSpeaking = false;
+                    URL.revokeObjectURL(audioUrl);
+                    reject(new Error('Audio playback failed'));
+                };
+                
+                audio.play().catch(error => {
+                    console.error('Failed to play audio:', error);
+                    this.isSpeaking = false;
+                    URL.revokeObjectURL(audioUrl);
+                    reject(error);
+                });
+                
+            } catch (error) {
+                this.isSpeaking = false;
+                reject(error);
+            }
         });
     }
 
     stopSpeaking() {
-        this.synthesis.cancel();
-    }
-
-    // Get available voices
-    getVoices() {
-        return this.synthesis.getVoices();
-    }
-
-    // Set voice by name or index
-    setVoice(voiceNameOrIndex) {
-        const voices = this.getVoices();
-        
-        if (typeof voiceNameOrIndex === 'string') {
-            this.currentVoice = voices.find(voice => 
-                voice.name.toLowerCase().includes(voiceNameOrIndex.toLowerCase())
-            );
-        } else if (typeof voiceNameOrIndex === 'number') {
-            this.currentVoice = voices[voiceNameOrIndex];
-        }
-        
-        if (this.currentVoice) {
-            console.log('Voice changed to:', this.currentVoice.name);
+        try {
+            // Stop Web Speech API synthesis
+            if (this.synthesis) {
+                this.synthesis.cancel();
+            }
+            
+            // Stop any playing audio elements
+            const audioElements = document.querySelectorAll('audio');
+            audioElements.forEach(audio => {
+                if (!audio.paused) {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            });
+            
+            this.isSpeaking = false;
+            
+        } catch (error) {
+            console.error('Error stopping speech:', error);
         }
     }
 
-    // Check if speech recognition is supported
+    async getAvailableVoices() {
+        try {
+            if (this.serviceAvailable) {
+                const response = await fetch(`${this.config.service.baseUrl}${this.config.service.endpoints.voices}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.voices || this.config.tts.availableVoices || [];
+                }
+            }
+            
+            // Fallback to Web Speech API voices
+            if (this.synthesis) {
+                return this.synthesis.getVoices().map(voice => ({
+                    id: voice.name,
+                    name: voice.name,
+                    language: voice.lang
+                }));
+            }
+            
+            return [];
+            
+        } catch (error) {
+            console.error('Error getting available voices:', error);
+            return this.config.tts.availableVoices || [];
+        }
+    }
+
+    setVoice(voiceId) {
+        if (this.serviceAvailable) {
+            this.config.tts.defaultVoice = voiceId;
+        } else if (this.synthesis) {
+            const voices = this.synthesis.getVoices();
+            this.currentVoice = voices.find(voice => voice.name === voiceId) || this.currentVoice;
+        }
+        
+        console.log('Voice changed to:', voiceId);
+    }
+
+    handleRecognitionResult(transcript, confidence = 0.8) {
+        console.log('Speech recognition result:', transcript, 'Confidence:', confidence);
+        
+        this.updateUI('');
+        
+        // Check confidence threshold
+        if (confidence < this.config.stt.confidenceThreshold) {
+            console.warn('Low confidence recognition result, ignoring');
+            return;
+        }
+        
+        // Send to main process via IPC
+        if (typeof window !== 'undefined' && window.electronAPI) {
+            window.electronAPI.sendSpeechRecognitionResult({
+                transcript,
+                text: transcript, // For compatibility
+                confidence,
+                timestamp: Date.now(),
+                source: this.serviceAvailable ? 'python-service' : 'web-speech-api'
+            });
+            
+            // Update status
+            window.electronAPI.sendSpeechRecognitionStatus({
+                listening: false // Recognition completed
+            });
+        }
+        
+        // Emit event for system orchestrator
+        if (this.recognitionResolve) {
+            this.recognitionResolve({
+                transcript,
+                confidence,
+                timestamp: Date.now()
+            });
+            this.recognitionResolve = null;
+            this.recognitionReject = null;
+        }
+        
+        // Send to app for processing
+        if (this.app && this.app.handleSpeechInput) {
+            this.app.handleSpeechInput({ text: transcript, confidence });
+        }
+    }
+
+    handleRecognitionError(error) {
+        console.error('Speech recognition error:', error);
+        
+        this.updateUI('');
+        
+        // Send to main process via IPC
+        if (typeof window !== 'undefined' && window.electronAPI) {
+            window.electronAPI.sendSpeechRecognitionError({
+                error: error.message || error,
+                timestamp: Date.now(),
+                source: this.serviceAvailable ? 'python-service' : 'web-speech-api'
+            });
+            
+            // Update status
+            window.electronAPI.sendSpeechRecognitionStatus({
+                listening: false // Recognition stopped due to error
+            });
+        }
+        
+        if (this.recognitionReject) {
+            this.recognitionReject(error);
+            this.recognitionResolve = null;
+            this.recognitionReject = null;
+        }
+        
+        if (this.app && this.app.handleError) {
+            this.app.handleError('Speech recognition error', error);
+        }
+    }
+
+    updateUI(message) {
+        const speechTextElement = document.getElementById('speech-text');
+        if (speechTextElement) {
+            speechTextElement.textContent = message;
+        }
+    }
+
+    // Public API methods
     isRecognitionSupported() {
-        return this.isSupported;
+        return this.isSupported && (this.serviceAvailable || !!this.recognition);
     }
 
-    // Check if currently listening
     isCurrentlyListening() {
         return this.isListening;
     }
 
-    // Check if TTS is speaking
-    isSpeaking() {
-        return this.synthesis.speaking;
+    isCurrentlySpeaking() {
+        return this.isSpeaking || (this.synthesis && this.synthesis.speaking);
     }
 
-    // Get speech recognition status
     getStatus() {
         return {
             supported: this.isSupported,
+            serviceAvailable: this.serviceAvailable,
             listening: this.isListening,
-            speaking: this.synthesis.speaking,
-            voice: this.currentVoice?.name || 'Default'
+            speaking: this.isCurrentlySpeaking(),
+            fallbackReady: !!this.recognition,
+            lastHealthCheck: this.lastHealthCheck,
+            serviceDownSince: this.serviceDownSince
         };
     }
 
-    // Test speech functionality
     async testSpeech() {
         try {
-            await this.speak("Speech test successful. I can hear and speak.");
+            await this.speak("Speech test successful. I can hear and speak using the new Python service.");
             return true;
         } catch (error) {
             console.error('Speech test failed:', error);
@@ -302,7 +878,6 @@ class SpeechManager {
         }
     }
 
-    // Handle microphone permissions
     async requestMicrophonePermission() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -314,47 +889,111 @@ class SpeechManager {
         }
     }
 
-    // Advanced speech recognition with custom grammar
-    startListeningWithGrammar(grammar) {
-        if (!this.isSupported) {
-            throw new Error('Speech recognition not supported');
-        }
+    setupIPCHandlers() {
+        if (typeof window !== 'undefined' && window.electronAPI) {
+            // Listen for commands from main process
+            window.electronAPI.onStartPythonSpeechRecognition(() => {
+                this.startPythonServiceListening().catch(error => {
+                    console.error('Failed to start Python service listening:', error);
+                    window.electronAPI.sendSpeechRecognitionError({
+                        error: error.message,
+                        source: 'python-service'
+                    });
+                });
+            });
 
-        // Note: Speech Grammar API is not widely supported
-        // This is a placeholder for future implementation
-        console.log('Custom grammar not supported in current implementation');
-        return this.startListening();
+            window.electronAPI.onStartFallbackSpeechRecognition(() => {
+                this.startFallbackListening().catch(error => {
+                    console.error('Failed to start fallback listening:', error);
+                    window.electronAPI.sendSpeechRecognitionError({
+                        error: error.message,
+                        source: 'web-speech-api'
+                    });
+                });
+            });
+
+            window.electronAPI.onStopSpeechRecognition(() => {
+                this.stopListening();
+            });
+
+            window.electronAPI.onSpeakTextPythonService((speechRequest) => {
+                this.speakWithPythonService(speechRequest.text, speechRequest.options)
+                    .then(() => {
+                        window.electronAPI.sendSpeechSynthesisComplete({ id: speechRequest.id });
+                    })
+                    .catch(error => {
+                        window.electronAPI.sendSpeechSynthesisError({
+                            error: error.message,
+                            id: speechRequest.id,
+                            source: 'python-service'
+                        });
+                    });
+            });
+
+            window.electronAPI.onSpeakTextFallback((speechRequest) => {
+                this.speakWithFallback(speechRequest.text, speechRequest.options)
+                    .then(() => {
+                        window.electronAPI.sendSpeechSynthesisComplete({ id: speechRequest.id });
+                    })
+                    .catch(error => {
+                        window.electronAPI.sendSpeechSynthesisError({
+                            error: error.message,
+                            id: speechRequest.id,
+                            source: 'web-speech-api'
+                        });
+                    });
+            });
+
+            window.electronAPI.onStopSpeech(() => {
+                this.stopSpeaking();
+            });
+
+            window.electronAPI.onSetFallbackVoice((voiceId) => {
+                this.setVoice(voiceId);
+            });
+
+            // Handle voice requests
+            window.electronAPI.handleGetFallbackVoices(async () => {
+                if (this.synthesis) {
+                    const voices = this.synthesis.getVoices();
+                    return voices.map(voice => ({
+                        id: voice.name,
+                        name: voice.name,
+                        language: voice.lang,
+                        localService: voice.localService
+                    }));
+                }
+                return [];
+            });
+
+            console.log('IPC handlers set up for speech manager');
+        }
     }
 
-    // Process speech with confidence scoring
-    processWithConfidence(result) {
-        if (result.results && result.results.length > 0) {
-            const confidence = result.results[0][0].confidence;
-            const transcript = result.results[0][0].transcript;
-            
-            return {
-                transcript,
-                confidence,
-                isReliable: confidence > 0.7
-            };
-        }
-        
-        return null;
-    }
-
-    // Cleanup resources
     destroy() {
+        console.log('Destroying Speech Manager...');
+        
         this.stopListening();
         this.stopSpeaking();
         
-        if (this.recognition) {
-            this.recognition = null;
+        if (this.healthCheckInterval) {
+            clearInterval(this.healthCheckInterval);
+            this.healthCheckInterval = null;
         }
         
-        if (this.recognitionTimeout) {
-            clearTimeout(this.recognitionTimeout);
-            this.recognitionTimeout = null;
+        if (this.recordingTimeout) {
+            clearTimeout(this.recordingTimeout);
+            this.recordingTimeout = null;
         }
+        
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
+        }
+        
+        this.recognition = null;
+        this.mediaRecorder = null;
+        this.stream = null;
         
         console.log('Speech Manager destroyed');
     }
