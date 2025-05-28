@@ -1,0 +1,23 @@
+# FastAPI and web server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Speech processing
+openai-whisper==20231117
+kokoro>=0.9.2
+
+# Audio processing
+soundfile==0.12.1
+librosa==0.10.1
+numpy==1.24.3
+
+# Machine learning
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# Data validation
+pydantic==2.5.0
+
+# Utilities
+python-dotenv==1.0.0
