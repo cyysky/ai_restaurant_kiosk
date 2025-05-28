@@ -239,7 +239,24 @@ class KioskApplication {
 
     this.orchestrator.on('ui-update', (update) => {
       if (this.mainWindow) {
-        this.mainWindow.webContents.send('ui-update', update);
+        console.log('🔍 FIX: UI update received in main.js:', {
+          update: update,
+          updateType: typeof update,
+          updateKeys: update ? Object.keys(update) : 'null/undefined',
+          updateStringified: JSON.stringify(update, null, 2)
+        });
+        
+        // 🔍 FIX: Ensure proper serialization by creating a clean object
+        const cleanUpdate = {
+          type: update.type,
+          data: update.data || {}
+        };
+        
+        console.log('🔍 FIX: Sending clean UI update:', cleanUpdate);
+        this.mainWindow.webContents.send('ui-update', cleanUpdate);
+        console.log('🔍 FIX: Clean UI update sent to renderer via IPC');
+      } else {
+        console.error('🔍 FIX: No main window available to send UI update');
       }
     });
 

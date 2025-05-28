@@ -93,9 +93,33 @@ class KioskApp {
                 }
             }
             
-            // Update UI to reflect error state
-            this.updateVoiceButton(false);
-            this.showLoading(false);
+            // Update UI to reflect error state using safe DOM utilities
+            console.log('🔍 Updating UI during critical error recovery...');
+            
+            // Use batch operations for safer recovery
+            const recoveryOperations = [
+                { type: 'class', elementId: 'voice-toggle', action: 'remove', className: 'listening' },
+                { type: 'class', elementId: 'listening-indicator', action: 'add', className: 'hidden' },
+                { type: 'class', elementId: 'loading-overlay', action: 'add', className: 'hidden' }
+            ];
+            
+            const results = domUtils.safeBatchUpdate(recoveryOperations);
+            
+            if (results.failed > 0) {
+                console.error('🚨 UI recovery partially failed:', results.errors);
+            } else {
+                console.log('✅ UI recovery completed successfully');
+            }
+            
+            // Update button text safely
+            const buttonText = domUtils.safeQuerySelector('voice-toggle', '.button-text');
+            if (buttonText) {
+                try {
+                    buttonText.textContent = 'Tap to Speak';
+                } catch (textError) {
+                    console.error('Error updating button text during recovery:', textError);
+                }
+            }
             
             // Show user-friendly error message
             if (this.avatarManager) {
@@ -107,14 +131,25 @@ class KioskApp {
             console.log('🔍 CRITICAL ERROR DEBUG INFO:', {
                 speechManagerDebug: this.speechManager?.getDebugInfo?.(),
                 errorHistory: this.errorHistory,
+                domCacheStats: domUtils.getCacheStats(),
                 memoryUsage: performance.memory ? {
                     used: performance.memory.usedJSHeapSize / 1024 / 1024,
                     total: performance.memory.totalJSHeapSize / 1024 / 1024
                 } : 'unavailable'
             });
             
+            // Clear DOM cache to force fresh lookups after recovery
+            domUtils.clearCache();
+            
         } catch (recoveryError) {
             console.error('🚨 ERROR DURING RECOVERY:', recoveryError);
+            
+            // Last resort: try to at least clear the DOM cache
+            try {
+                domUtils.clearCache();
+            } catch (cacheError) {
+                console.error('🚨 Failed to clear DOM cache during recovery:', cacheError);
+            }
         }
     }
 
@@ -122,6 +157,9 @@ class KioskApp {
         console.log('Initializing AI Kiosk System...');
         
         try {
+            // Validate critical DOM elements first
+            await this.validateCriticalElements();
+            
             // Set up event listeners
             this.setupEventListeners();
             
@@ -153,35 +191,130 @@ class KioskApp {
         }
     }
 
-    setupEventListeners() {
-        // Mode toggle buttons
-        document.getElementById('voice-mode-btn').addEventListener('click', () => {
-            this.setMode('voice');
-        });
+    async validateCriticalElements() {
+        console.log('🔍 Validating critical DOM elements...');
         
-        document.getElementById('touch-mode-btn').addEventListener('click', () => {
-            this.setMode('touch');
-        });
+        const criticalElements = [
+            'voice-toggle',
+            'listening-indicator',
+            'speech-text',
+            'loading-overlay',
+            'voice-mode-btn',
+            'touch-mode-btn',
+            'voice-panel',
+            'touch-panel',
+            'menu-categories',
+            'menu-items',
+            'back-to-categories',
+            'close-modal',
+            'checkout-btn',
+            'system-status'
+        ];
+        
+        // Wait a moment for DOM to be fully ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const validation = domUtils.validateCriticalElements(criticalElements);
+        
+        if (!validation.allFound) {
+            const error = new Error(`Critical DOM elements missing: ${validation.missing.join(', ')}`);
+            this.logAppError('critical_elements_missing', {
+                missing: validation.missing,
+                found: validation.found,
+                details: validation.details
+            });
+            
+            // Try to recover by waiting and re-checking
+            console.warn('⚠️ Attempting DOM recovery...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const retryValidation = domUtils.validateCriticalElements(validation.missing);
+            if (!retryValidation.allFound) {
+                throw error;
+            } else {
+                console.log('✅ DOM recovery successful');
+            }
+        } else {
+            console.log('✅ All critical DOM elements validated successfully');
+        }
+        
+        // Clear any cached elements to ensure fresh lookups
+        domUtils.clearCache();
+    }
+
+    setupEventListeners() {
+        console.log('🔍 DEBUG: Setting up event listeners...');
+        
+        // Mode toggle buttons
+        const voiceModeBtn = document.getElementById('voice-mode-btn');
+        console.log('🔍 DEBUG: voice-mode-btn element:', voiceModeBtn);
+        if (voiceModeBtn) {
+            voiceModeBtn.addEventListener('click', () => {
+                this.setMode('voice');
+            });
+        } else {
+            console.error('🚨 CRITICAL: voice-mode-btn element not found during setup!');
+            this.logAppError('missing_voice_mode_btn_setup', { timestamp: Date.now() });
+        }
+        
+        const touchModeBtn = document.getElementById('touch-mode-btn');
+        console.log('🔍 DEBUG: touch-mode-btn element:', touchModeBtn);
+        if (touchModeBtn) {
+            touchModeBtn.addEventListener('click', () => {
+                this.setMode('touch');
+            });
+        } else {
+            console.error('🚨 CRITICAL: touch-mode-btn element not found during setup!');
+            this.logAppError('missing_touch_mode_btn_setup', { timestamp: Date.now() });
+        }
         
         // Voice toggle button
-        document.getElementById('voice-toggle').addEventListener('click', () => {
-            this.toggleVoiceInput();
-        });
+        const voiceToggle = document.getElementById('voice-toggle');
+        console.log('🔍 DEBUG: voice-toggle element during setup:', voiceToggle);
+        if (voiceToggle) {
+            voiceToggle.addEventListener('click', () => {
+                this.toggleVoiceInput();
+            });
+        } else {
+            console.error('🚨 CRITICAL: voice-toggle element not found during setup!');
+            this.logAppError('missing_voice_toggle_setup', { timestamp: Date.now() });
+        }
         
         // Back to categories button
-        document.getElementById('back-to-categories').addEventListener('click', () => {
-            this.showCategories();
-        });
+        const backToCategories = document.getElementById('back-to-categories');
+        console.log('🔍 DEBUG: back-to-categories element:', backToCategories);
+        if (backToCategories) {
+            backToCategories.addEventListener('click', () => {
+                this.showCategories();
+            });
+        } else {
+            console.error('🚨 CRITICAL: back-to-categories element not found during setup!');
+            this.logAppError('missing_back_to_categories_setup', { timestamp: Date.now() });
+        }
         
         // Modal close button
-        document.getElementById('close-modal').addEventListener('click', () => {
-            this.closeModal();
-        });
+        const closeModal = document.getElementById('close-modal');
+        console.log('🔍 DEBUG: close-modal element:', closeModal);
+        if (closeModal) {
+            closeModal.addEventListener('click', () => {
+                this.closeModal();
+            });
+        } else {
+            console.error('🚨 CRITICAL: close-modal element not found during setup!');
+            this.logAppError('missing_close_modal_setup', { timestamp: Date.now() });
+        }
         
         // Checkout button
-        document.getElementById('checkout-btn').addEventListener('click', () => {
-            this.handleCheckout();
-        });
+        const checkoutBtn = document.getElementById('checkout-btn');
+        console.log('🔍 DEBUG: checkout-btn element:', checkoutBtn);
+        if (checkoutBtn) {
+            checkoutBtn.addEventListener('click', () => {
+                this.handleCheckout();
+            });
+        } else {
+            console.error('🚨 CRITICAL: checkout-btn element not found during setup!');
+            this.logAppError('missing_checkout_btn_setup', { timestamp: Date.now() });
+        }
         
         // Keyboard shortcuts for development
         document.addEventListener('keydown', (e) => {
@@ -215,7 +348,16 @@ class KioskApp {
             // Listen for raw transcripts (for debugging/display)
             window.electronAPI.onRawTranscript && window.electronAPI.onRawTranscript((data) => {
                 console.log('Raw transcript:', data);
-                document.getElementById('speech-text').textContent = `Heard: "${data.text}"`;
+                
+                console.log('🔍 DEBUG: Attempting to update speech-text from raw transcript...');
+                const success = domUtils.safeUpdateText('speech-text', `Heard: "${data.text}"`);
+                
+                if (!success) {
+                    console.error('🚨 CRITICAL: Failed to update speech-text from raw transcript!');
+                    this.logAppError('speech_text_raw_transcript_failed', { data, timestamp: Date.now() });
+                } else {
+                    console.log('🔍 DEBUG: Speech text updated successfully from raw transcript');
+                }
             });
 
             // Listen for processed interactions
@@ -264,6 +406,63 @@ class KioskApp {
 
     handleUIUpdate(update) {
         console.log('🔍 HANDLING UI UPDATE:', update);
+        
+        // 🔍 FIX: Handle IPC serialization corruption
+        let processedUpdate = update;
+        
+        // Check if the update object has been corrupted by IPC
+        if (update && typeof update === 'object') {
+            // Try to access properties directly - if they're undefined, the object is corrupted
+            if (update.type === undefined && update.data === undefined) {
+                console.log('🔍 FIX: Detected corrupted UI update object, attempting reconstruction');
+                
+                // Try to extract from the object's internal structure
+                const keys = Object.getOwnPropertyNames(update);
+                console.log('🔍 FIX: Available property names:', keys);
+                
+                // Check if it's a serialized object that needs manual reconstruction
+                if (keys.length === 0) {
+                    console.error('🔍 FIX: UI update object is completely empty, cannot recover');
+                    return;
+                }
+                
+                // Try to reconstruct from prototype or descriptor
+                try {
+                    const descriptor = Object.getOwnPropertyDescriptor(update, 'type');
+                    if (descriptor) {
+                        console.log('🔍 FIX: Found type descriptor:', descriptor);
+                    }
+                    
+                    // Last resort: check if it's a stringified object in disguise
+                    const updateStr = String(update);
+                    if (updateStr !== '[object Object]') {
+                        console.log('🔍 FIX: Attempting to parse string representation:', updateStr);
+                        processedUpdate = JSON.parse(updateStr);
+                    } else {
+                        console.error('🔍 FIX: Cannot recover UI update structure');
+                        return;
+                    }
+                } catch (reconstructError) {
+                    console.error('🔍 FIX: Failed to reconstruct UI update:', reconstructError);
+                    return;
+                }
+            } else {
+                // Object seems intact
+                processedUpdate = update;
+            }
+        } else {
+            console.error('🔍 FIX: Invalid UI update object type:', typeof update);
+            return;
+        }
+        
+        // Validate the processed update
+        if (!processedUpdate || !processedUpdate.type) {
+            console.error('🔍 FIX: Processed UI update still missing type field:', processedUpdate);
+            return;
+        }
+        
+        console.log('🔍 FIX: Successfully processed UI update:', processedUpdate);
+        update = processedUpdate;
         
         switch (update.type) {
             case 'show-categories':
@@ -395,8 +594,16 @@ class KioskApp {
             this.showLoading(true);
             this.avatarManager.setThinking(true);
             
-            // Display what was heard
-            document.getElementById('speech-text').textContent = `You said: "${transcript}"`;
+            // Display what was heard using safe DOM utilities
+            console.log('🔍 DEBUG: Attempting to update speech-text element...');
+            const success = domUtils.safeUpdateText('speech-text', `You said: "${transcript}"`);
+            
+            if (!success) {
+                console.error('🚨 CRITICAL: Failed to update speech-text during processing!');
+                this.logAppError('speech_text_update_failed', { transcript, timestamp: Date.now() });
+            } else {
+                console.log('🔍 DEBUG: Speech text updated successfully during processing');
+            }
             
             // Send to backend for NLU processing
             console.log('🔍 Sending to NLU...');
@@ -692,18 +899,65 @@ class KioskApp {
     }
 
     updateVoiceButton(isListening) {
-        const button = document.getElementById('voice-toggle');
-        const buttonText = button.querySelector('.button-text');
-        const listeningIndicator = document.getElementById('listening-indicator');
+        console.log('🔍 DEBUG: updateVoiceButton called with isListening:', isListening);
+        
+        // Use safe DOM utilities for race condition prevention
+        const operations = [];
         
         if (isListening) {
-            button.classList.add('listening');
-            buttonText.textContent = 'Listening...';
-            listeningIndicator.classList.remove('hidden');
+            operations.push(
+                { type: 'class', elementId: 'voice-toggle', action: 'add', className: 'listening' },
+                { type: 'class', elementId: 'listening-indicator', action: 'remove', className: 'hidden' }
+            );
+            
+            // Update button text safely
+            if (domUtils.safeUpdateText('voice-toggle', 'Listening...')) {
+                // If direct text update fails, try querySelector approach
+                const buttonText = domUtils.safeQuerySelector('voice-toggle', '.button-text');
+                if (buttonText) {
+                    try {
+                        buttonText.textContent = 'Listening...';
+                        console.log('🔍 DEBUG: Button text updated via querySelector');
+                    } catch (error) {
+                        console.error('🚨 ERROR updating button text:', error);
+                        this.logAppError('button_text_update_error', error);
+                    }
+                }
+            }
         } else {
-            button.classList.remove('listening');
-            buttonText.textContent = 'Tap to Speak';
-            listeningIndicator.classList.add('hidden');
+            operations.push(
+                { type: 'class', elementId: 'voice-toggle', action: 'remove', className: 'listening' },
+                { type: 'class', elementId: 'listening-indicator', action: 'add', className: 'hidden' }
+            );
+            
+            // Update button text safely
+            if (!domUtils.safeUpdateText('voice-toggle', 'Tap to Speak')) {
+                // If direct text update fails, try querySelector approach
+                const buttonText = domUtils.safeQuerySelector('voice-toggle', '.button-text');
+                if (buttonText) {
+                    try {
+                        buttonText.textContent = 'Tap to Speak';
+                        console.log('🔍 DEBUG: Button text updated via querySelector');
+                    } catch (error) {
+                        console.error('🚨 ERROR updating button text:', error);
+                        this.logAppError('button_text_update_error', error);
+                    }
+                }
+            }
+        }
+        
+        // Perform batch update for class changes
+        const results = domUtils.safeBatchUpdate(operations);
+        
+        if (results.failed > 0) {
+            console.error('🚨 CRITICAL: Voice button update failed:', results.errors);
+            this.logAppError('voice_button_batch_update_failed', {
+                isListening,
+                results,
+                timestamp: Date.now()
+            });
+        } else {
+            console.log('🔍 DEBUG: Voice button updated successfully');
         }
     }
 
@@ -729,11 +983,21 @@ class KioskApp {
     }
 
     showLoading(show) {
-        const overlay = document.getElementById('loading-overlay');
-        if (show) {
-            overlay.classList.remove('hidden');
+        console.log('🔍 DEBUG: showLoading called with show:', show);
+        
+        // Use safe DOM utilities to prevent race conditions
+        const action = show ? 'remove' : 'add';
+        const success = domUtils.safeUpdateClass('loading-overlay', action, 'hidden');
+        
+        if (!success) {
+            console.error('🚨 CRITICAL: Failed to update loading overlay!');
+            this.logAppError('loading_overlay_update_failed', {
+                show,
+                action,
+                timestamp: Date.now()
+            });
         } else {
-            overlay.classList.add('hidden');
+            console.log(`🔍 DEBUG: Loading overlay ${show ? 'shown' : 'hidden'} successfully`);
         }
     }
 

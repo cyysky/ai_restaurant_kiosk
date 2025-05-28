@@ -3,20 +3,20 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Speech Recognition IPC
-  onStartPythonSpeechRecognition: (callback) => ipcRenderer.on('start-python-speech-recognition', callback),
-  onStartFallbackSpeechRecognition: (callback) => ipcRenderer.on('start-fallback-speech-recognition', callback),
-  onStopSpeechRecognition: (callback) => ipcRenderer.on('stop-speech-recognition', callback),
+  // Speech Recognition IPC - FIX: Extract data from event
+  onStartPythonSpeechRecognition: (callback) => ipcRenderer.on('start-python-speech-recognition', (event, data) => callback(data)),
+  onStartFallbackSpeechRecognition: (callback) => ipcRenderer.on('start-fallback-speech-recognition', (event, data) => callback(data)),
+  onStopSpeechRecognition: (callback) => ipcRenderer.on('stop-speech-recognition', (event, data) => callback(data)),
   
   sendSpeechRecognitionResult: (data) => ipcRenderer.send('speech-recognition-result', data),
   sendSpeechRecognitionError: (error) => ipcRenderer.send('speech-recognition-error', error),
   sendSpeechRecognitionStatus: (status) => ipcRenderer.send('speech-recognition-status', status),
   
-  // Speech Synthesis IPC
-  onSpeakTextPythonService: (callback) => ipcRenderer.on('speak-text-python-service', callback),
-  onSpeakTextFallback: (callback) => ipcRenderer.on('speak-text-fallback', callback),
-  onStopSpeech: (callback) => ipcRenderer.on('stop-speech', callback),
-  onSetFallbackVoice: (callback) => ipcRenderer.on('set-fallback-voice', callback),
+  // Speech Synthesis IPC - FIX: Extract data from event
+  onSpeakTextPythonService: (callback) => ipcRenderer.on('speak-text-python-service', (event, data) => callback(data)),
+  onSpeakTextFallback: (callback) => ipcRenderer.on('speak-text-fallback', (event, data) => callback(data)),
+  onStopSpeech: (callback) => ipcRenderer.on('stop-speech', (event, data) => callback(data)),
+  onSetFallbackVoice: (callback) => ipcRenderer.on('set-fallback-voice', (event, data) => callback(data)),
   
   sendSpeechSynthesisComplete: (data) => ipcRenderer.send('speech-synthesis-complete', data),
   sendSpeechSynthesisError: (error) => ipcRenderer.send('speech-synthesis-error', error),
@@ -41,16 +41,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setVoice: (voiceId) => ipcRenderer.invoke('speech-set-voice', voiceId),
   getServiceHealth: () => ipcRenderer.invoke('speech-service-health'),
   
-  // Event listeners for system events
-  onSystemReady: (callback) => ipcRenderer.on('system-ready', callback),
-  onSystemError: (callback) => ipcRenderer.on('system-error', callback),
-  onMenuUpdated: (callback) => ipcRenderer.on('menu-updated', callback),
-  onOrderUpdated: (callback) => ipcRenderer.on('order-updated', callback),
-  onUIUpdate: (callback) => ipcRenderer.on('ui-update', callback),
-  onPythonServiceStatus: (callback) => ipcRenderer.on('python-service-status', callback),
-  onNotification: (callback) => ipcRenderer.on('notification', callback),
-  onRawTranscript: (callback) => ipcRenderer.on('raw-transcript', callback),
-  onProcessedInteraction: (callback) => ipcRenderer.on('processed-interaction', callback),
+  // Event listeners for system events - FIX: Extract data from event
+  onSystemReady: (callback) => ipcRenderer.on('system-ready', (event, ...args) => callback(...args)),
+  onSystemError: (callback) => ipcRenderer.on('system-error', (event, data) => callback(data)),
+  onMenuUpdated: (callback) => ipcRenderer.on('menu-updated', (event, data) => callback(data)),
+  onOrderUpdated: (callback) => ipcRenderer.on('order-updated', (event, data) => callback(data)),
+  onUIUpdate: (callback) => ipcRenderer.on('ui-update', (event, data) => {
+    console.log('🔍 FIX: Preload received UI update:', { event: !!event, data });
+    callback(data);
+  }),
+  onPythonServiceStatus: (callback) => ipcRenderer.on('python-service-status', (event, data) => callback(data)),
+  onNotification: (callback) => ipcRenderer.on('notification', (event, data) => callback(data)),
+  onRawTranscript: (callback) => ipcRenderer.on('raw-transcript', (event, data) => callback(data)),
+  onProcessedInteraction: (callback) => ipcRenderer.on('processed-interaction', (event, data) => callback(data)),
   
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),

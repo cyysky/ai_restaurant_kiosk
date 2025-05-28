@@ -929,17 +929,55 @@ class SpeechManager {
         try {
             this.isSpeaking = true;
             
+            // 🔍 PARAMETER VALIDATION: Ensure values are within valid ranges
+            const speed = Math.max(0.5, Math.min(2.0, options.speed || this.config.tts.speed || 1.0));
+            const pitch = Math.max(0.5, Math.min(2.0, options.pitch || this.config.tts.pitch || 1.0));
+            const voice = options.voice || this.config.tts.defaultVoice || 'af_heart';
+            
             const requestBody = {
                 text: text,
-                voice: options.voice || this.config.tts.defaultVoice,
-                speed: options.speed || this.config.tts.speed,
-                pitch: options.pitch || this.config.tts.pitch
+                voice: voice,
+                speed: speed,
+                pitch: pitch
             };
             
-            // 🔍 DEBUG: Log TTS request parameters
-            console.log('🔍 TTS REQUEST PARAMETERS:', {
+            // 🔍 DEBUG: Log TTS request parameters with validation
+            console.log('🔍 TTS REQUEST PARAMETERS (validated):', {
                 endpoint: `${this.config.service.baseUrl}${this.config.service.endpoints.tts}`,
                 requestBody: requestBody,
+                originalOptions: options,
+                validationApplied: {
+                    speedClamped: speed !== (options.speed || this.config.tts.speed),
+                    pitchClamped: pitch !== (options.pitch || this.config.tts.pitch)
+                },
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            return await this.speakWithPythonServiceDirect(text, requestBody);
+            
+        } catch (error) {
+            this.isSpeaking = false;
+            throw error;
+        }
+    }
+
+    async speakWithPythonServiceDirect(text, validatedOptions) {
+        try {
+            this.isSpeaking = true;
+            
+            // Use the already validated parameters directly
+            const requestBody = {
+                text: text,
+                voice: validatedOptions.voice,
+                speed: validatedOptions.speed,
+                pitch: validatedOptions.pitch
+            };
+            
+            // 🔍 DEBUG: Log direct TTS request (no re-validation)
+            console.log('🔍 TTS REQUEST DIRECT (pre-validated):', {
+                endpoint: `${this.config.service.baseUrl}${this.config.service.endpoints.tts}`,
+                requestBody: requestBody,
+                source: 'backend-validated',
                 headers: { 'Content-Type': 'application/json' }
             });
             
@@ -959,18 +997,18 @@ class SpeechManager {
             
             if (response.ok) {
                 const audioBlob = await response.blob();
-                console.log('🔍 TTS SUCCESS: Audio blob received, size:', audioBlob.size);
+                console.log('🔍 TTS SUCCESS (DIRECT): Audio blob received, size:', audioBlob.size);
                 await this.playAudioBlob(audioBlob);
             } else {
                 // 🔍 DEBUG: Log detailed error response
-                console.error('🔍 TTS ERROR RESPONSE:', {
+                console.error('🔍 TTS ERROR RESPONSE (DIRECT):', {
                     status: response.status,
                     statusText: response.statusText,
                     headers: Object.fromEntries(response.headers.entries())
                 });
                 
                 const errorText = await response.text().catch(() => 'Unable to read error response');
-                console.error('🔍 TTS ERROR BODY:', errorText);
+                console.error('🔍 TTS ERROR BODY (DIRECT):', errorText);
                 
                 let errorObj;
                 try {
@@ -1203,9 +1241,36 @@ class SpeechManager {
     }
 
     updateUI(message) {
-        const speechTextElement = document.getElementById('speech-text');
-        if (speechTextElement) {
-            speechTextElement.textContent = message;
+        console.log('🔍 DEBUG: SpeechManager updateUI called with message:', message);
+        
+        // Use safe DOM utilities to prevent race conditions
+        if (typeof window !== 'undefined' && window.domUtils) {
+            const success = window.domUtils.safeUpdateText('speech-text', message);
+            
+            if (!success) {
+                console.error('🚨 CRITICAL: Failed to update speech-text in SpeechManager!');
+                this.logError('speech_text_update_failed', { message, timestamp: Date.now() });
+            } else {
+                console.log('🔍 DEBUG: Speech text updated successfully via domUtils');
+            }
+        } else {
+            // Fallback to direct DOM access if domUtils not available
+            console.warn('⚠️ domUtils not available, using fallback DOM access');
+            
+            const speechTextElement = document.getElementById('speech-text');
+            if (!speechTextElement) {
+                console.error('🚨 CRITICAL: speech-text element not found in SpeechManager!');
+                this.logError('missing_speech_text_element', { message, timestamp: Date.now() });
+                return;
+            }
+            
+            try {
+                speechTextElement.textContent = message;
+                console.log('🔍 DEBUG: Speech text updated successfully via fallback');
+            } catch (error) {
+                console.error('🚨 ERROR in SpeechManager updateUI:', error);
+                this.logError('update_ui_error', error);
+            }
         }
     }
 
@@ -1309,7 +1374,16 @@ class SpeechManager {
             });
 
             window.electronAPI.onSpeakTextPythonService((speechRequest) => {
-                this.speakWithPythonService(speechRequest.text, speechRequest.options)
+                // 🔍 DEBUG: Log received speech request from backend
+                console.log('🔍 FRONTEND: Received speech request from backend:', {
+                    text: speechRequest.text.substring(0, 50) + '...',
+                    options: speechRequest.options,
+                    id: speechRequest.id,
+                    validationApplied: speechRequest.validationApplied
+                });
+                
+                // Use the validated parameters directly from the backend
+                this.speakWithPythonServiceDirect(speechRequest.text, speechRequest.options)
                     .then(() => {
                         window.electronAPI.sendSpeechSynthesisComplete({ id: speechRequest.id });
                     })

@@ -224,7 +224,24 @@ class SystemOrchestrator extends EventEmitter {
             });
             
             if (dialogResponse.text) {
-                console.log('🔍 Speaking response:', dialogResponse.text.substring(0, 50) + '...');
+                // 🔍 DIAGNOSTIC: Safe substring for speaking response log
+                let responseTextPreview;
+                try {
+                    if (dialogResponse.text && typeof dialogResponse.text === 'string') {
+                        responseTextPreview = dialogResponse.text.substring(0, 50) + '...';
+                    } else {
+                        responseTextPreview = `[INVALID DIALOG RESPONSE TEXT: type=${typeof dialogResponse.text}, value=${dialogResponse.text}]`;
+                    }
+                } catch (responseSubstringError) {
+                    console.error('🔍 DIAGNOSTIC: Substring error in dialog response logging:', {
+                        error: responseSubstringError,
+                        dialogResponse: dialogResponse,
+                        textType: typeof dialogResponse.text
+                    });
+                    responseTextPreview = '[SUBSTRING ERROR]';
+                }
+                
+                console.log('🔍 Speaking response:', responseTextPreview);
                 await this.components.speechOutput.speak(dialogResponse.text);
             }
 
@@ -376,7 +393,9 @@ class SystemOrchestrator extends EventEmitter {
                         console.log('🔍 SHOW_MENU action - view:', action.data.view, 'category:', action.data.category);
                         if (action.data.view === 'categories') {
                             console.log('🔍 Emitting ui-update: show-categories');
-                            this.emit('ui-update', { type: 'show-categories', data: {} });
+                            const uiUpdate = { type: 'show-categories', data: {} };
+                            console.log('🔍 DIAGNOSTIC: UI update object being emitted:', JSON.stringify(uiUpdate, null, 2));
+                            this.emit('ui-update', uiUpdate);
                         } else if (action.data.view === 'items' && action.data.category) {
                             console.log('🔍 Getting category items for:', action.data.category);
                             const items = await this.components.menuEngine.getCategory(action.data.category);

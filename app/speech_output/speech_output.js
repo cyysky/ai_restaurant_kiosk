@@ -194,22 +194,67 @@ class SpeechOutput extends EventEmitter {
             return { success: false, message: 'Invalid text' };
         }
 
+        // 🔍 PARAMETER VALIDATION: Ensure values are within valid ranges
+        const speed = Math.max(0.5, Math.min(2.0, options.speed || this.config.tts.speed || 1.0));
+        const pitch = Math.max(0.5, Math.min(2.0, options.pitch || this.config.tts.pitch || 1.0));
+        const volume = Math.max(0.1, Math.min(1.0, options.volume || this.config.tts.volume || 1.0));
+        const voice = options.voice || this.config.tts.defaultVoice || 'af_heart';
+        
         const speechRequest = {
             text: text.trim(),
             options: {
-                voice: options.voice || this.config.tts.defaultVoice,
-                speed: options.speed || this.config.tts.speed,
-                pitch: options.pitch || this.config.tts.pitch,
-                volume: options.volume || this.config.tts.volume
+                voice: voice,
+                speed: speed,
+                pitch: pitch,
+                volume: volume
             },
             id: Date.now() + Math.random().toString(36).substring(2), // More unique ID
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            // 🔍 DEBUG: Add validation info
+            validationApplied: {
+                speedClamped: speed !== (options.speed || this.config.tts.speed),
+                pitchClamped: pitch !== (options.pitch || this.config.tts.pitch),
+                volumeClamped: volume !== (options.volume || this.config.tts.volume)
+            }
         };
+        
+        // 🔍 DIAGNOSTIC: Safe substring operation with error handling
+        let textPreview;
+        try {
+            if (text && typeof text === 'string' && text.length > 0) {
+                textPreview = text.substring(0, 50) + '...';
+            } else {
+                textPreview = `[INVALID TEXT: type=${typeof text}, value=${text}]`;
+            }
+        } catch (substringError) {
+            console.error('🔍 DIAGNOSTIC: Substring error in speech request logging:', {
+                error: substringError,
+                text: text,
+                textType: typeof text,
+                textValue: text
+            });
+            textPreview = '[SUBSTRING ERROR]';
+        }
+        
+        // 🔍 DEBUG: Log speech request with validation details
+        console.log('🔍 SPEECH REQUEST (backend):', {
+            text: textPreview,
+            options: speechRequest.options,
+            validationApplied: speechRequest.validationApplied
+        });
 
         try {
             if (this.isSpeaking) {
                 this.speechQueue.push(speechRequest);
-                console.log('Added speech to queue:', text.substring(0, 50) + '...');
+                // 🔍 DIAGNOSTIC: Safe substring for queue logging
+                let queueTextPreview;
+                try {
+                    queueTextPreview = text && typeof text === 'string' ? text.substring(0, 50) + '...' : '[INVALID TEXT]';
+                } catch (queueSubstringError) {
+                    console.error('🔍 DIAGNOSTIC: Substring error in queue logging:', queueSubstringError);
+                    queueTextPreview = '[SUBSTRING ERROR]';
+                }
+                console.log('Added speech to queue:', queueTextPreview);
                 return { success: true, message: 'Queued', id: speechRequest.id };
             }
 
@@ -236,7 +281,24 @@ class SpeechOutput extends EventEmitter {
         this.currentSpeech = speechRequest;
         this.isSpeaking = true;
 
-        console.log('Speaking:', speechRequest.text.substring(0, 100) + '...');
+        // 🔍 DIAGNOSTIC: Safe substring for speaking log
+        let speakingTextPreview;
+        try {
+            if (speechRequest.text && typeof speechRequest.text === 'string') {
+                speakingTextPreview = speechRequest.text.substring(0, 100) + '...';
+            } else {
+                speakingTextPreview = `[INVALID SPEECH TEXT: type=${typeof speechRequest.text}, value=${speechRequest.text}]`;
+            }
+        } catch (speakingSubstringError) {
+            console.error('🔍 DIAGNOSTIC: Substring error in speaking log:', {
+                error: speakingSubstringError,
+                speechRequest: speechRequest,
+                textType: typeof speechRequest.text
+            });
+            speakingTextPreview = '[SUBSTRING ERROR]';
+        }
+        
+        console.log('Speaking:', speakingTextPreview);
         this.emit('speech-start', { text: speechRequest.text, id: speechRequest.id });
 
         try {
@@ -366,7 +428,22 @@ class SpeechOutput extends EventEmitter {
         if (this.isSpeaking) return; // Already processing something
         if (this.speechQueue.length > 0) {
             const nextSpeech = this.speechQueue.shift();
-            console.log('Processing next speech from queue:', nextSpeech.text.substring(0,30) + "...");
+            // 🔍 DIAGNOSTIC: Safe substring for queue processing log
+            let nextTextPreview;
+            try {
+                if (nextSpeech && nextSpeech.text && typeof nextSpeech.text === 'string') {
+                    nextTextPreview = nextSpeech.text.substring(0, 30) + "...";
+                } else {
+                    nextTextPreview = `[INVALID NEXT SPEECH: ${JSON.stringify(nextSpeech)}]`;
+                }
+            } catch (nextSubstringError) {
+                console.error('🔍 DIAGNOSTIC: Substring error in queue processing log:', {
+                    error: nextSubstringError,
+                    nextSpeech: nextSpeech
+                });
+                nextTextPreview = '[SUBSTRING ERROR]';
+            }
+            console.log('Processing next speech from queue:', nextTextPreview);
             await this.processSpeechRequest(nextSpeech);
         } else {
             this.isSpeaking = false; // Ensure state is correct if queue is empty
@@ -428,7 +505,18 @@ class SpeechOutput extends EventEmitter {
             serviceAvailable: this.serviceAvailable,
             hasMainWindow: !!this.mainWindow,
             currentSpeech: this.currentSpeech ? {
-                text: this.currentSpeech.text.substring(0, 50) + '...',
+                text: (() => {
+                    try {
+                        if (this.currentSpeech.text && typeof this.currentSpeech.text === 'string') {
+                            return this.currentSpeech.text.substring(0, 50) + '...';
+                        } else {
+                            return `[INVALID CURRENT SPEECH TEXT: ${typeof this.currentSpeech.text}]`;
+                        }
+                    } catch (statusSubstringError) {
+                        console.error('🔍 DIAGNOSTIC: Substring error in getStatus:', statusSubstringError);
+                        return '[SUBSTRING ERROR]';
+                    }
+                })(),
                 id: this.currentSpeech.id
             } : null,
             lastHealthCheck: this.lastHealthCheck,
