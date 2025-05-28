@@ -66,11 +66,13 @@ jest.mock('ws', () => ({
 
 // Mock sqlite3
 jest.mock('sqlite3', () => ({
-  Database: jest.fn().mockImplementation(() => ({
-    run: jest.fn((sql, params, callback) => callback && callback(null)),
-    get: jest.fn((sql, params, callback) => callback && callback(null, {})),
-    all: jest.fn((sql, params, callback) => callback && callback(null, [])),
-    close: jest.fn((callback) => callback && callback(null))
+  verbose: jest.fn(() => ({
+    Database: jest.fn().mockImplementation(() => ({
+      run: jest.fn((sql, params, callback) => callback && callback(null)),
+      get: jest.fn((sql, params, callback) => callback && callback(null, {})),
+      all: jest.fn((sql, params, callback) => callback && callback(null, [])),
+      close: jest.fn((callback) => callback && callback(null))
+    }))
   }))
 }));
 

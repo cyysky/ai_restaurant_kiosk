@@ -1,36 +1,42 @@
-const { KioskApplication } = require('../../main');
 const { BrowserWindow, app, ipcMain } = require('electron');
+
+// Mock SystemOrchestrator before requiring main
+const mockOrchestrator = {
+  initialize: jest.fn(() => Promise.resolve()),
+  shutdown: jest.fn(() => Promise.resolve()),
+  setMainWindow: jest.fn(),
+  handleSpeechInput: jest.fn(() => Promise.resolve({ success: true })),
+  handleTouchInput: jest.fn(() => Promise.resolve({ success: true })),
+  handleMenuRequest: jest.fn(() => Promise.resolve({ success: true })),
+  getSystemStatus: jest.fn(() => Promise.resolve({ status: 'ready' })),
+  updateConfiguration: jest.fn(() => Promise.resolve({ success: true })),
+  on: jest.fn()
+};
+
+jest.mock('../../app/orchestrator/system_orchestrator', () => {
+  return jest.fn().mockImplementation(() => mockOrchestrator);
+});
+
+const { KioskApplication } = require('../../main');
 
 describe('KioskApplication', () => {
   let kioskApp;
-  let mockOrchestrator;
 
   beforeEach(() => {
     jest.clearAllMocks();
     
-    // Mock SystemOrchestrator
-    mockOrchestrator = {
-      initialize: jest.fn(() => Promise.resolve()),
-      shutdown: jest.fn(() => Promise.resolve()),
-      setMainWindow: jest.fn(),
-      handleSpeechInput: jest.fn(() => Promise.resolve({ success: true })),
-      handleTouchInput: jest.fn(() => Promise.resolve({ success: true })),
-      handleMenuRequest: jest.fn(() => Promise.resolve({ success: true })),
-      getSystemStatus: jest.fn(() => Promise.resolve({ status: 'ready' })),
-      updateConfiguration: jest.fn(() => Promise.resolve({ success: true })),
-      on: jest.fn()
-    };
-
-    // Mock the SystemOrchestrator module
-    jest.doMock('../../app/orchestrator/system_orchestrator', () => {
-      return jest.fn().mockImplementation(() => mockOrchestrator);
-    });
+    // Reset mock functions and their implementations
+    mockOrchestrator.initialize.mockClear().mockResolvedValue();
+    mockOrchestrator.shutdown.mockClear().mockResolvedValue();
+    mockOrchestrator.setMainWindow.mockClear();
+    mockOrchestrator.handleSpeechInput.mockClear().mockResolvedValue({ success: true });
+    mockOrchestrator.handleTouchInput.mockClear().mockResolvedValue({ success: true });
+    mockOrchestrator.handleMenuRequest.mockClear().mockResolvedValue({ success: true });
+    mockOrchestrator.getSystemStatus.mockClear().mockResolvedValue({ status: 'ready' });
+    mockOrchestrator.updateConfiguration.mockClear().mockResolvedValue({ success: true });
+    mockOrchestrator.on.mockClear();
 
     kioskApp = new KioskApplication();
-  });
-
-  afterEach(() => {
-    jest.dontMock('../../app/orchestrator/system_orchestrator');
   });
 
   describe('Constructor', () => {
