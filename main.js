@@ -101,8 +101,28 @@ class KioskApplication {
         }
       });
 
-      this.mainWindow.webContents.on('crashed', (event, killed) => {
-        console.error('🚨 Renderer process crashed!', { killed });
+      // Updated to use the new render-process-gone event instead of deprecated 'crashed'
+      this.mainWindow.webContents.on('render-process-gone', (event, details) => {
+        console.error('🚨 Renderer process gone!', {
+          reason: details.reason,
+          exitCode: details.exitCode,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Log additional context for debugging
+        console.error('Memory usage before crash:', process.memoryUsage());
+        console.error('Active handles:', process._getActiveHandles().length);
+        console.error('Active requests:', process._getActiveRequests().length);
+        
+        // Attempt to restart the renderer if it wasn't intentionally killed
+        if (details.reason !== 'clean-exit' && details.reason !== 'killed') {
+          console.log('Attempting to reload renderer process...');
+          setTimeout(() => {
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.reload();
+            }
+          }, 1000);
+        }
       });
 
       this.mainWindow.webContents.on('unresponsive', () => {

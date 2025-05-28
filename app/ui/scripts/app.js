@@ -7,6 +7,13 @@ class KioskApp {
         this.isListening = false;
         this.isProcessing = false;
         
+        // DEBUG: Error tracking
+        this.errorHistory = [];
+        this.crashPreventionActive = true;
+        
+        // Set up global error handlers before initializing managers
+        this.setupGlobalErrorHandlers();
+        
         // Initialize managers
         this.speechManager = new SpeechManager(this);
         this.touchManager = new TouchManager(this);
@@ -15,6 +22,100 @@ class KioskApp {
         
         // Initialize the application
         this.init();
+    }
+    
+    setupGlobalErrorHandlers() {
+        // Capture unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('🚨 UNHANDLED PROMISE REJECTION in KioskApp:', event.reason);
+            this.logAppError('unhandled_promise_rejection', event.reason);
+            
+            // Prevent the default behavior (which would crash the app)
+            if (this.crashPreventionActive) {
+                event.preventDefault();
+                this.handleCriticalError('Unhandled promise rejection', event.reason);
+            }
+        });
+        
+        // Capture general errors
+        window.addEventListener('error', (event) => {
+            console.error('🚨 UNHANDLED ERROR in KioskApp:', event.error);
+            this.logAppError('unhandled_error', event.error);
+            
+            if (this.crashPreventionActive) {
+                this.handleCriticalError('Unhandled error', event.error);
+            }
+        });
+        
+        console.log('🔍 Global error handlers set up for KioskApp');
+    }
+    
+    logAppError(type, error) {
+        const errorEntry = {
+            type,
+            error: error?.message || error,
+            stack: error?.stack,
+            timestamp: Date.now(),
+            appState: {
+                currentMode: this.currentMode,
+                currentView: this.currentView,
+                isListening: this.isListening,
+                isProcessing: this.isProcessing,
+                speechManagerState: this.speechManager?.getDebugInfo?.() || 'unavailable'
+            }
+        };
+        
+        this.errorHistory.push(errorEntry);
+        
+        // Keep only last 20 errors
+        if (this.errorHistory.length > 20) {
+            this.errorHistory.shift();
+        }
+        
+        console.error('🔍 APP ERROR LOGGED:', errorEntry);
+    }
+    
+    handleCriticalError(message, error) {
+        console.error('🚨 CRITICAL ERROR DETECTED:', message, error);
+        
+        try {
+            // Reset application state to prevent cascading failures
+            this.isListening = false;
+            this.isProcessing = false;
+            
+            // Stop speech manager if it exists
+            if (this.speechManager) {
+                try {
+                    this.speechManager.stopListening();
+                    this.speechManager.stopSpeaking();
+                } catch (speechError) {
+                    console.error('Error stopping speech manager:', speechError);
+                }
+            }
+            
+            // Update UI to reflect error state
+            this.updateVoiceButton(false);
+            this.showLoading(false);
+            
+            // Show user-friendly error message
+            if (this.avatarManager) {
+                this.avatarManager.speak("I've encountered a technical issue. The system is recovering. Please try again in a moment.");
+                this.avatarManager.setEmotion('confused');
+            }
+            
+            // Log debug information
+            console.log('🔍 CRITICAL ERROR DEBUG INFO:', {
+                speechManagerDebug: this.speechManager?.getDebugInfo?.(),
+                errorHistory: this.errorHistory,
+                memoryUsage: performance.memory ? {
+                    used: performance.memory.usedJSHeapSize / 1024 / 1024,
+                    total: performance.memory.totalJSHeapSize / 1024 / 1024
+                } : 'unavailable'
+            });
+            
+        } catch (recoveryError) {
+            console.error('🚨 ERROR DURING RECOVERY:', recoveryError);
+        }
     }
 
     async init() {
@@ -179,10 +280,26 @@ class KioskApp {
     }
 
     async toggleVoiceInput() {
-        if (this.isListening) {
-            await this.stopListening();
-        } else {
-            await this.startListening();
+        try {
+            if (this.isListening) {
+                await this.stopListening();
+            } else {
+                await this.startListening();
+            }
+        } catch (error) {
+            console.error('Error in toggleVoiceInput:', error);
+            
+            // Reset state to prevent inconsistent UI
+            this.isListening = false;
+            this.updateVoiceButton(false);
+            this.avatarManager.setListening(false);
+            
+            // Provide user feedback
+            this.avatarManager.speak("I'm having trouble with voice input right now. Please try again or use the touch screen.");
+            this.avatarManager.setEmotion('confused');
+            
+            // Log error for debugging
+            this.handleError('Voice input toggle failed', error);
         }
     }
 
@@ -200,47 +317,80 @@ class KioskApp {
             
         } catch (error) {
             console.error('Speech recognition error:', error);
-            this.avatarManager.speak("Sorry, I couldn't hear you clearly. Please try again.");
-            this.handleError('Speech recognition failed', error);
+            
+            // Ensure state is properly reset on error
             this.isListening = false;
             this.updateVoiceButton(false);
             this.avatarManager.setListening(false);
+            
+            // Provide user feedback
+            this.avatarManager.speak("Sorry, I couldn't hear you clearly. Please try again.");
+            this.handleError('Speech recognition failed', error);
+            
+            // Re-throw to allow calling code to handle if needed
+            throw error;
         }
     }
 
     async stopListening() {
-        this.speechManager.stopListening();
-        this.isListening = false;
-        this.updateVoiceButton(false);
-        this.avatarManager.setListening(false);
+        try {
+            this.speechManager.stopListening();
+            this.isListening = false;
+            this.updateVoiceButton(false);
+            this.avatarManager.setListening(false);
+        } catch (error) {
+            console.error('Error stopping speech recognition:', error);
+            
+            // Ensure state is reset even if stop fails
+            this.isListening = false;
+            this.updateVoiceButton(false);
+            this.avatarManager.setListening(false);
+            
+            // Log error but don't show user message as this is usually called internally
+            this.handleError('Stop listening failed', error);
+        }
     }
 
     async processSpeechInput(transcript) {
-        console.log('Processing speech input:', transcript);
-        
-        this.isProcessing = true;
-        this.showLoading(true);
-        this.avatarManager.setThinking(true);
-        
-        // Display what was heard
-        document.getElementById('speech-text').textContent = `You said: "${transcript}"`;
+        console.log('🔍 Processing speech input:', transcript);
+        this.logAppError('speech_processing_start', { transcript });
         
         try {
+            this.isProcessing = true;
+            this.showLoading(true);
+            this.avatarManager.setThinking(true);
+            
+            // Display what was heard
+            document.getElementById('speech-text').textContent = `You said: "${transcript}"`;
+            
             // Send to backend for NLU processing
+            console.log('🔍 Sending to NLU...');
             const response = await this.sendToNLU(transcript);
+            console.log('🔍 NLU response received:', response);
             
             if (response && response.intent) {
+                console.log('🔍 Handling NLU response...');
                 await this.handleNLUResponse(response);
+                console.log('🔍 NLU response handled successfully');
             } else {
+                console.warn('⚠️ No valid intent in NLU response');
                 this.avatarManager.speak("I'm not sure I understood that. Could you please try again?");
                 this.avatarManager.setEmotion('confused');
             }
             
         } catch (error) {
-            console.error('NLU processing error:', error);
+            console.error('🚨 NLU processing error:', error);
+            this.logAppError('nlu_processing_error', error);
+            
+            // Log speech manager state for debugging
+            if (this.speechManager) {
+                console.log('🔍 Speech manager debug info during NLU error:', this.speechManager.getDebugInfo());
+            }
+            
             this.avatarManager.speak("I'm having trouble understanding right now. You can use the touch screen instead.");
             this.handleError('NLU processing failed', error);
         } finally {
+            console.log('🔍 Speech processing cleanup...');
             this.isProcessing = false;
             this.showLoading(false);
             this.avatarManager.setThinking(false);
