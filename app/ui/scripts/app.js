@@ -192,12 +192,54 @@ class KioskApp {
 
     async sendToNLU(text) {
         try {
+            // Check if Electron API is available
+            if (!window.electronAPI || typeof window.electronAPI.invoke !== 'function') {
+                console.warn('Electron API not available, using fallback NLU processing');
+                // Fallback: Simple pattern matching for basic commands
+                return this.fallbackNLUProcessing(text);
+            }
+            
             // Send to Electron main process for NLU processing
-            const response = await window.electronAPI?.invoke('speech-input', { text });
+            const response = await window.electronAPI.invoke('speech-input', { text });
+            console.log('NLU response received:', response);
             return response;
         } catch (error) {
             console.error('Failed to send to NLU:', error);
-            throw error;
+            console.warn('Falling back to local NLU processing');
+            // Fallback to local processing if Electron IPC fails
+            return this.fallbackNLUProcessing(text);
+        }
+    }
+
+    fallbackNLUProcessing(text) {
+        const lowerText = text.toLowerCase();
+        console.log('Processing with fallback NLU:', lowerText);
+        
+        // Simple pattern matching for common intents
+        if (lowerText.includes('menu') || lowerText.includes('show') || lowerText.includes('see')) {
+            if (lowerText.includes('appetizer')) {
+                return { intent: 'browse_menu', entities: { category: 'appetizers' }, response_text: 'Here are our appetizers.' };
+            } else if (lowerText.includes('main') || lowerText.includes('entree')) {
+                return { intent: 'browse_menu', entities: { category: 'mains' }, response_text: 'Here are our main courses.' };
+            } else if (lowerText.includes('drink') || lowerText.includes('beverage')) {
+                return { intent: 'browse_menu', entities: { category: 'beverages' }, response_text: 'Here are our beverages.' };
+            } else if (lowerText.includes('dessert')) {
+                return { intent: 'browse_menu', entities: { category: 'desserts' }, response_text: 'Here are our desserts.' };
+            } else {
+                return { intent: 'browse_menu', entities: {}, response_text: 'Here is our menu.' };
+            }
+        } else if (lowerText.includes('add') || lowerText.includes('order') || lowerText.includes('want')) {
+            return { intent: 'add_item', entities: {}, response_text: 'What would you like to add to your order?' };
+        } else if (lowerText.includes('cart') || lowerText.includes('order')) {
+            return { intent: 'view_cart', entities: {}, response_text: 'Here is your current order.' };
+        } else if (lowerText.includes('checkout') || lowerText.includes('pay') || lowerText.includes('done')) {
+            return { intent: 'checkout', entities: {}, response_text: 'Ready to checkout?' };
+        } else if (lowerText.includes('help')) {
+            return { intent: 'help', entities: {}, response_text: 'I can help you browse our menu and place an order.' };
+        } else if (lowerText.includes('hello') || lowerText.includes('hi')) {
+            return { intent: 'greeting', entities: {}, response_text: 'Hello! Welcome to our restaurant.' };
+        } else {
+            return { intent: 'unknown', entities: {}, response_text: 'I\'m not sure I understood that. Could you please try again?' };
         }
     }
 
@@ -393,19 +435,42 @@ class KioskApp {
 
     async loadMenuData() {
         try {
-            // Load menu data from backend
-            const menuData = await window.electronAPI?.invoke('menu-request', { action: 'get_menu' });
+            console.log('Loading menu data...');
             
-            if (menuData) {
-                this.menuData = menuData;
-                this.touchManager.setMenuData(menuData);
-                console.log('Menu data loaded successfully');
+            // Check if Electron API is available
+            if (!window.electronAPI || typeof window.electronAPI.invoke !== 'function') {
+                console.warn('Electron API not available, loading sample menu data');
+                this.loadSampleMenuData();
+                return;
+            }
+            
+            // Load menu data from backend
+            const rawMenuData = await window.electronAPI.invoke('menu-request', { action: 'get_menu' });
+            console.log('Raw menu data received:', rawMenuData);
+            
+            if (rawMenuData && rawMenuData.categories) {
+                // Transform the data structure from backend format to frontend format
+                // Backend: { "categories": { "appetizers": { "items": [...] } } }
+                // Frontend: { "appetizers": [...] }
+                const transformedMenuData = {};
+                
+                for (const [categoryKey, categoryData] of Object.entries(rawMenuData.categories)) {
+                    if (categoryData && categoryData.items && Array.isArray(categoryData.items)) {
+                        transformedMenuData[categoryKey] = categoryData.items;
+                        console.log(`Transformed ${categoryKey}: ${categoryData.items.length} items`);
+                    }
+                }
+                
+                this.menuData = transformedMenuData;
+                this.touchManager.setMenuData(transformedMenuData);
+                console.log('Menu data loaded and transformed successfully:', Object.keys(transformedMenuData));
             } else {
-                // Fallback to sample data
+                console.warn('Invalid menu data structure received, falling back to sample data');
                 this.loadSampleMenuData();
             }
         } catch (error) {
             console.error('Failed to load menu data:', error);
+            console.warn('Falling back to sample menu data');
             this.loadSampleMenuData();
         }
     }

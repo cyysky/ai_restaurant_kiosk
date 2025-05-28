@@ -10,6 +10,28 @@ class KioskApplication {
     this.mainWindow = null;
     this.orchestrator = null;
     this.isDev = process.argv.includes('--dev');
+    this.isRemoteDebuggingEnabled = process.argv.includes('--remote-debugging-port=9222');
+    this.isLoggingEnabled = process.argv.includes('--enable-logging');
+    
+    // Log debugging status
+    this.logDebuggingStatus();
+  }
+
+  logDebuggingStatus() {
+    if (this.isRemoteDebuggingEnabled) {
+      console.log('🐛 Remote debugging enabled on port 9222');
+      console.log('   Chrome DevTools URL: chrome://inspect/#devices');
+      console.log('   Or navigate to: chrome://inspect in Chrome browser');
+    }
+
+    if (this.isLoggingEnabled) {
+      console.log('📝 Enhanced logging enabled');
+      console.log('   Additional console output will be available for frontend errors');
+    }
+
+    if (this.isDev) {
+      console.log('🔧 Development mode enabled');
+    }
   }
 
   async initialize() {
@@ -53,6 +75,28 @@ class KioskApplication {
         this.mainWindow.webContents.openDevTools();
       }
     });
+
+    // Enhanced logging for frontend errors when logging is enabled
+    if (this.isLoggingEnabled) {
+      this.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        console.log(`[FRONTEND ${level.toUpperCase()}] ${message}`);
+        if (line && sourceId) {
+          console.log(`  at ${sourceId}:${line}`);
+        }
+      });
+
+      this.mainWindow.webContents.on('crashed', (event, killed) => {
+        console.error('🚨 Renderer process crashed!', { killed });
+      });
+
+      this.mainWindow.webContents.on('unresponsive', () => {
+        console.warn('⚠️ Renderer process became unresponsive');
+      });
+
+      this.mainWindow.webContents.on('responsive', () => {
+        console.log('✅ Renderer process became responsive again');
+      });
+    }
 
     // Handle window closed
     this.mainWindow.on('closed', () => {
@@ -107,6 +151,10 @@ class KioskApplication {
 const kioskApp = new KioskApplication();
 
 app.whenReady().then(async () => {
+  if (kioskApp.isLoggingEnabled) {
+    console.log('🚀 Electron app ready, initializing kiosk application...');
+  }
+  
   await kioskApp.initialize();
   kioskApp.createWindow();
 

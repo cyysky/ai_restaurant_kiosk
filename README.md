@@ -136,6 +136,52 @@ npm start
 ```
 This starts the application in full-screen kiosk mode.
 
+### Debug Modes
+The application includes several debugging options for development and troubleshooting:
+
+#### Full Debug Mode (Recommended for Development)
+```bash
+npm run debug
+```
+Enables development mode + remote debugging + enhanced logging.
+
+#### Remote Debugging Only
+```bash
+npm run debug:remote
+```
+Enables development mode + remote debugging on port 9222.
+- Access Chrome DevTools at: `chrome://inspect/#devices`
+- Or navigate to: `chrome://inspect` in Chrome browser
+
+#### Enhanced Logging Only
+```bash
+npm run debug:logging
+```
+Enables development mode + enhanced console logging for frontend errors.
+
+#### Production Debug Mode
+```bash
+npm run debug:prod
+```
+Enables remote debugging + enhanced logging in production (full-screen) mode.
+
+#### Manual Debug Flags
+You can also manually add debug flags to any npm script:
+```bash
+# Custom combinations
+electron . --dev --remote-debugging-port=9222
+electron . --enable-logging
+electron . --dev --remote-debugging-port=9222 --enable-logging
+```
+
+### Debug Features
+When debugging flags are enabled, you'll see:
+- 🐛 Remote debugging status and connection instructions
+- 📝 Enhanced logging for frontend errors and crashes
+- 🔧 Development mode indicators
+- Console output for renderer process events (crashes, unresponsive states)
+- Detailed frontend console messages with source locations
+
 ### Testing Individual Components
 ```bash
 # Test speech recognition
@@ -203,11 +249,38 @@ ollama list
 
 ### Debug Mode
 ```bash
-# Enable debug logging
-DEBUG=* npm run dev
+# Enable full debug mode with remote debugging and enhanced logging
+npm run debug
 
-# Check system logs
-tail -f logs/system.log
+# Enable only remote debugging (Chrome DevTools)
+npm run debug:remote
+
+# Enable only enhanced logging
+npm run debug:logging
+
+# Debug in production mode (full-screen)
+npm run debug:prod
+```
+
+#### Using Remote Debugging
+1. Start the app with remote debugging enabled:
+   ```bash
+   npm run debug:remote
+   ```
+2. Open Chrome browser and navigate to: `chrome://inspect`
+3. Click "Configure" and ensure `localhost:9222` is listed
+4. Click "inspect" under your Electron app to open DevTools
+5. Debug the renderer process directly in Chrome DevTools
+
+#### Enhanced Logging Output
+When `--enable-logging` is enabled, you'll see detailed console output:
+```
+🐛 Remote debugging enabled on port 9222
+📝 Enhanced logging enabled
+🔧 Development mode enabled
+🚀 Electron app ready, initializing kiosk application...
+[FRONTEND ERROR] TypeError: Cannot read property 'x' of undefined
+  at app.js:123
 ```
 
 ## Customization
