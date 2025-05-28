@@ -311,9 +311,25 @@ class SpeechOutput extends EventEmitter {
         console.error('Speech synthesis error in main process:', errorData.error || errorData);
         
         const speechId = errorData.id || this.currentSpeech?.id;
+        const errorMessage = errorData.error || errorData.message || errorData;
+
+        // Handle specific TTS service errors
+        if (typeof errorMessage === 'string') {
+            if (errorMessage.includes('Unprocessable Entity') || errorMessage.includes('422')) {
+                console.error('TTS Service returned 422 Unprocessable Entity - likely invalid voice or parameters');
+                // Try fallback voice or Web Speech API
+                if (this.config.fallback.fallbackOnServiceError && this.config.fallback.enableWebSpeechAPI) {
+                    console.log('Attempting fallback due to TTS parameter error');
+                    this.serviceAvailable = false; // Temporarily mark service as unavailable
+                }
+            } else if (errorMessage.includes('Speech synthesis failed')) {
+                console.error('TTS Service synthesis failed - checking service health');
+                this.checkServiceHealth();
+            }
+        }
 
         this.emit('speech-error', {
-            error: errorData.error || errorData.message || errorData,
+            error: errorMessage,
             id: speechId,
             text: this.currentSpeech?.text,
             timestamp: Date.now(),
@@ -321,18 +337,16 @@ class SpeechOutput extends EventEmitter {
         });
         
         // If it's a service-related error, re-check health
-        if (errorData.source === 'python-service' || 
-            (typeof errorData.error === 'string' && errorData.error.toLowerCase().includes('service'))) {
+        if (errorData.source === 'python-service' ||
+            (typeof errorMessage === 'string' && (
+                errorMessage.toLowerCase().includes('service') ||
+                errorMessage.includes('422') ||
+                errorMessage.includes('Unprocessable Entity')
+            ))) {
             console.log('TTS Service-related error detected, re-checking health...');
             this.checkServiceHealth().then(isUp => {
-                if (isUp && this.currentSpeech && this.config.fallback.fallbackOnServiceError) {
-                    // If service is now up, but we were trying to use it, don't immediately fallback.
-                    // The next item in queue will try the service.
-                } else if (!isUp && this.currentSpeech && this.config.fallback.fallbackOnServiceError) {
-                    // If service is still down, and we were trying to use it, and fallback is enabled,
-                    // we could potentially retry the current item with fallback.
-                    // For now, just proceed to next in queue.
-                    console.warn("Service still down. Fallback might be used for next item if enabled.");
+                if (!isUp && this.currentSpeech && this.config.fallback.fallbackOnServiceError) {
+                    console.log('Service down, will use fallback for next speech request');
                 }
             });
         }

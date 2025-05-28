@@ -157,6 +157,8 @@ class CartManager {
     }
 
     createCartItemElement(item) {
+        console.log('🔍 Creating cart item element for:', item);
+        
         const cartItem = document.createElement('div');
         cartItem.className = 'cart-item';
         cartItem.dataset.itemId = item.id;
@@ -174,6 +176,45 @@ class CartManager {
             </div>
         `;
         
+        // Add direct event listeners as backup to event delegation
+        const buttons = cartItem.querySelectorAll('.cart-qty-btn');
+        buttons.forEach(button => {
+            console.log('🔍 Adding direct event listener to button:', button.dataset.action);
+            
+            button.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const action = button.dataset.action;
+                const itemId = button.getAttribute('data-item-id');
+                
+                console.log('🔍 Direct button click:', { action, itemId });
+                
+                // Call the touch manager's handler if available
+                if (this.app && this.app.touchManager && this.app.touchManager.handleCartQuantityChange) {
+                    console.log('🔍 Calling touch manager handler');
+                    this.app.touchManager.handleCartQuantityChange(itemId, action);
+                } else {
+                    console.log('🔍 Touch manager not available, handling directly');
+                    this.handleDirectCartAction(itemId, action);
+                }
+            });
+            
+            // Add visual feedback
+            button.addEventListener('mousedown', () => {
+                button.style.transform = 'scale(0.95)';
+            });
+            
+            button.addEventListener('mouseup', () => {
+                button.style.transform = 'scale(1)';
+            });
+            
+            button.addEventListener('mouseleave', () => {
+                button.style.transform = 'scale(1)';
+            });
+        });
+        
+        console.log('✅ Cart item element created with event listeners');
         return cartItem;
     }
 
@@ -203,6 +244,35 @@ class CartManager {
                 checkoutBtn.textContent = `Checkout ($${this.total.toFixed(2)})`;
             }
         }
+    }
+
+    // Direct cart action handler (fallback when touch manager is not available)
+    handleDirectCartAction(itemId, action) {
+        console.log('🔍 handleDirectCartAction called with:', { itemId, action });
+        
+        const numericItemId = parseInt(itemId);
+        const item = this.getItemById(numericItemId);
+        
+        if (!item) {
+            console.error('❌ Item not found for direct action:', numericItemId);
+            return;
+        }
+        
+        console.log('🔍 Processing direct action:', action, 'for item:', item.name);
+        
+        if (action === 'increase') {
+            this.updateQuantity(numericItemId, item.quantity + 1);
+        } else if (action === 'decrease') {
+            if (item.quantity > 1) {
+                this.updateQuantity(numericItemId, item.quantity - 1);
+            } else {
+                this.removeItem(numericItemId);
+            }
+        } else if (action === 'remove') {
+            this.removeItem(numericItemId);
+        }
+        
+        console.log('✅ Direct cart action completed');
     }
 
     triggerCartUpdate() {

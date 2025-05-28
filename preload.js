@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUIUpdate: (callback) => ipcRenderer.on('ui-update', callback),
   onPythonServiceStatus: (callback) => ipcRenderer.on('python-service-status', callback),
   onNotification: (callback) => ipcRenderer.on('notification', callback),
+  onRawTranscript: (callback) => ipcRenderer.on('raw-transcript', callback),
+  onProcessedInteraction: (callback) => ipcRenderer.on('processed-interaction', callback),
   
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),

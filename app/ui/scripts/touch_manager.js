@@ -51,12 +51,25 @@ class TouchManager {
             this.addSelectedItemToCart();
         });
 
-        // Cart item controls
+        // Cart item controls - Enhanced event delegation with debugging
         document.addEventListener('click', (e) => {
+            console.log('🔍 Document click detected:', e.target);
+            
             if (e.target.classList.contains('cart-qty-btn')) {
+                console.log('🔍 Cart button clicked:', e.target);
+                
                 const action = e.target.dataset.action;
-                const itemId = e.target.dataset.itemId;
-                this.handleCartQuantityChange(itemId, action);
+                const itemId = e.target.getAttribute('data-item-id'); // Use getAttribute for hyphenated attributes
+                
+                console.log('🔍 Button action:', action);
+                console.log('🔍 Button itemId:', itemId);
+                
+                if (action && itemId) {
+                    console.log('🔍 Calling handleCartQuantityChange with:', itemId, action);
+                    this.handleCartQuantityChange(itemId, action);
+                } else {
+                    console.error('❌ Missing action or itemId:', { action, itemId });
+                }
             }
         });
     }
@@ -261,23 +274,45 @@ class TouchManager {
     }
 
     handleCartQuantityChange(itemId, action) {
-        const item = this.app.cartManager.getItemById(itemId);
-        if (!item) return;
+        console.log('🔍 handleCartQuantityChange called with:', { itemId, action });
+        
+        // Convert itemId to number if it's a string (for consistency)
+        const numericItemId = parseInt(itemId);
+        console.log('🔍 Converted itemId to:', numericItemId);
+        
+        const item = this.app.cartManager.getItemById(numericItemId);
+        console.log('🔍 Found item:', item);
+        
+        if (!item) {
+            console.error('❌ Item not found in cart:', numericItemId);
+            return;
+        }
+        
+        console.log('🔍 Processing action:', action);
         
         if (action === 'increase') {
-            this.app.cartManager.updateQuantity(itemId, item.quantity + 1);
+            console.log('🔍 Increasing quantity from', item.quantity, 'to', item.quantity + 1);
+            this.app.cartManager.updateQuantity(numericItemId, item.quantity + 1);
         } else if (action === 'decrease') {
             if (item.quantity > 1) {
-                this.app.cartManager.updateQuantity(itemId, item.quantity - 1);
+                console.log('🔍 Decreasing quantity from', item.quantity, 'to', item.quantity - 1);
+                this.app.cartManager.updateQuantity(numericItemId, item.quantity - 1);
             } else {
-                this.app.cartManager.removeItem(itemId);
+                console.log('🔍 Removing item (quantity would be 0)');
+                this.app.cartManager.removeItem(numericItemId);
             }
         } else if (action === 'remove') {
-            this.app.cartManager.removeItem(itemId);
+            console.log('🔍 Removing item completely');
+            this.app.cartManager.removeItem(numericItemId);
+        } else {
+            console.error('❌ Unknown action:', action);
+            return;
         }
         
         // Trigger haptic feedback
         this.triggerHapticFeedback('light');
+        
+        console.log('✅ Cart quantity change completed');
     }
 
     handleSwipeGesture(endTime, endPos) {

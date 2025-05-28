@@ -223,6 +223,12 @@ class KioskApp {
                 console.log('Processed interaction:', data);
             });
 
+            // 🔍 DEBUG: Listen for UI update events from backend
+            window.electronAPI.onUIUpdate && window.electronAPI.onUIUpdate((update) => {
+                console.log('🔍 UI UPDATE EVENT RECEIVED:', update);
+                this.handleUIUpdate(update);
+            });
+
             console.log('System event listeners set up');
         }
     }
@@ -253,6 +259,35 @@ class KioskApp {
         if (notification.type === 'warning' || notification.type === 'error') {
             // Could show a toast notification or update status
             console.warn('System notification:', notification.message);
+        }
+    }
+
+    handleUIUpdate(update) {
+        console.log('🔍 HANDLING UI UPDATE:', update);
+        
+        switch (update.type) {
+            case 'show-categories':
+                console.log('🔍 UI Update: Showing categories');
+                this.showCategories();
+                break;
+            case 'show-category':
+                console.log('🔍 UI Update: Showing category items for:', update.data.category);
+                this.showMenuItems(update.data.category);
+                break;
+            case 'show-cart':
+                console.log('🔍 UI Update: Showing cart');
+                // Handle cart display
+                break;
+            case 'process-checkout':
+                console.log('🔍 UI Update: Processing checkout');
+                this.handleCheckout();
+                break;
+            case 'end-session':
+                console.log('🔍 UI Update: Ending session');
+                // Handle session end
+                break;
+            default:
+                console.warn('🔍 Unknown UI update type:', update.type);
         }
     }
 
@@ -369,11 +404,13 @@ class KioskApp {
             console.log('🔍 NLU response received:', response);
             
             if (response && response.intent) {
+                console.log('🔍 Valid intent found:', response.intent, 'with entities:', response.entities);
                 console.log('🔍 Handling NLU response...');
                 await this.handleNLUResponse(response);
                 console.log('🔍 NLU response handled successfully');
             } else {
-                console.warn('⚠️ No valid intent in NLU response');
+                console.warn('⚠️ No valid intent in NLU response:', response);
+                this.logAppError('invalid_nlu_response', { transcript, response });
                 this.avatarManager.speak("I'm not sure I understood that. Could you please try again?");
                 this.avatarManager.setEmotion('confused');
             }
@@ -381,6 +418,14 @@ class KioskApp {
         } catch (error) {
             console.error('🚨 NLU processing error:', error);
             this.logAppError('nlu_processing_error', error);
+            
+            // Enhanced error logging for debugging
+            console.error('🔍 Error details:', {
+                message: error.message,
+                stack: error.stack,
+                transcript: transcript,
+                timestamp: Date.now()
+            });
             
             // Log speech manager state for debugging
             if (this.speechManager) {
@@ -408,10 +453,30 @@ class KioskApp {
             
             // Send to Electron main process for NLU processing
             const response = await window.electronAPI.handleSpeechInput({ text });
-            console.log('NLU response received:', response);
-            return response;
+            console.log('🔍 NLU response received:', response);
+            
+            // Validate response structure
+            if (response && response.success && response.intent) {
+                return {
+                    intent: response.intent,
+                    entities: response.entities || {},
+                    confidence: response.confidence || 0.8,
+                    response_text: response.response_text
+                };
+            } else if (response && response.intent) {
+                // Handle case where success flag might be missing but intent exists
+                return {
+                    intent: response.intent,
+                    entities: response.entities || {},
+                    confidence: response.confidence || 0.8,
+                    response_text: response.response_text
+                };
+            } else {
+                console.warn('⚠️ Invalid NLU response structure:', response);
+                return this.fallbackNLUProcessing(text);
+            }
         } catch (error) {
-            console.error('Failed to send to NLU:', error);
+            console.error('🚨 Failed to send to NLU:', error);
             console.warn('Falling back to local NLU processing');
             // Fallback to local processing if Electron IPC fails
             return this.fallbackNLUProcessing(text);
@@ -482,10 +547,16 @@ class KioskApp {
     async handleBrowseMenu(entities) {
         const category = entities?.category;
         
+        console.log('🔍 HANDLE BROWSE MENU called with category:', category);
+        console.log('🔍 Current mode:', this.currentMode);
+        console.log('🔍 Current view:', this.currentView);
+        
         if (category) {
+            console.log('🔍 Showing menu items for category:', category);
             this.showMenuItems(category);
             this.avatarManager.speak(`Here are our ${category}. What looks good to you?`);
         } else {
+            console.log('🔍 Showing categories menu');
             this.showCategories();
             this.avatarManager.speak("Here's our menu. Which category would you like to explore?");
         }
@@ -566,13 +637,39 @@ class KioskApp {
     }
 
     showCategories() {
+        console.log('🔍 SHOW CATEGORIES called');
+        console.log('🔍 Current mode:', this.currentMode);
+        
         this.currentView = 'categories';
-        document.getElementById('menu-categories').classList.remove('hidden');
-        document.getElementById('menu-items').classList.add('hidden');
+        
+        const categoriesElement = document.getElementById('menu-categories');
+        const itemsElement = document.getElementById('menu-items');
+        
+        console.log('🔍 Categories element found:', !!categoriesElement);
+        console.log('🔍 Items element found:', !!itemsElement);
+        
+        if (categoriesElement) {
+            categoriesElement.classList.remove('hidden');
+            console.log('🔍 Categories element made visible');
+        }
+        
+        if (itemsElement) {
+            itemsElement.classList.add('hidden');
+            console.log('🔍 Items element hidden');
+        }
         
         // Update touch panel if in touch mode
         if (this.currentMode === 'touch') {
+            console.log('🔍 Calling touchManager.showCategories()');
             this.touchManager.showCategories();
+        } else {
+            console.log('🔍 Voice mode - ensuring menu is visible in voice panel');
+            // In voice mode, we need to ensure the menu is visible
+            const touchPanel = document.getElementById('touch-panel');
+            if (touchPanel) {
+                touchPanel.style.display = 'block';
+                console.log('🔍 Touch panel made visible for voice mode menu display');
+            }
         }
     }
 

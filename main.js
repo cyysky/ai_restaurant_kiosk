@@ -156,9 +156,24 @@ class KioskApplication {
   }
 
   setupIpcHandlers() {
-    // Handle speech input
-    ipcMain.handle('speech-input', async (event, audioData) => {
-      return await this.orchestrator.handleSpeechInput(audioData);
+    // Handle speech input - fix parameter structure
+    ipcMain.handle('speech-input', async (event, speechData) => {
+      // Convert frontend speech data to expected format
+      const audioData = {
+        text: speechData.text,
+        confidence: speechData.confidence || 0.8,
+        timestamp: Date.now(),
+        source: 'frontend'
+      };
+      const result = await this.orchestrator.handleSpeechInput(audioData);
+      // Return structured response for frontend
+      return {
+        success: true,
+        intent: result?.intent,
+        entities: result?.entities,
+        response_text: result?.response_text,
+        confidence: result?.confidence
+      };
     });
 
     // Handle touch input
@@ -186,6 +201,9 @@ class KioskApplication {
       // This will be handled by the renderer's speech manager
       return [];
     });
+
+    // Note: Speech IPC handlers are now managed by SpeechInput/SpeechOutput components
+    // to avoid duplicate registrations and ensure proper lifecycle management
 
     // Set up orchestrator event forwarding to renderer
     this.setupEventForwarding();

@@ -936,6 +936,13 @@ class SpeechManager {
                 pitch: options.pitch || this.config.tts.pitch
             };
             
+            // 🔍 DEBUG: Log TTS request parameters
+            console.log('🔍 TTS REQUEST PARAMETERS:', {
+                endpoint: `${this.config.service.baseUrl}${this.config.service.endpoints.tts}`,
+                requestBody: requestBody,
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.config.service.timeout);
             
@@ -952,10 +959,27 @@ class SpeechManager {
             
             if (response.ok) {
                 const audioBlob = await response.blob();
+                console.log('🔍 TTS SUCCESS: Audio blob received, size:', audioBlob.size);
                 await this.playAudioBlob(audioBlob);
             } else {
-                const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(`Speech synthesis failed: ${error.error || response.statusText}`);
+                // 🔍 DEBUG: Log detailed error response
+                console.error('🔍 TTS ERROR RESPONSE:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                const errorText = await response.text().catch(() => 'Unable to read error response');
+                console.error('🔍 TTS ERROR BODY:', errorText);
+                
+                let errorObj;
+                try {
+                    errorObj = JSON.parse(errorText);
+                } catch (e) {
+                    errorObj = { error: errorText || 'Unknown error' };
+                }
+                
+                throw new Error(`Speech synthesis failed: ${errorObj.error || response.statusText}`);
             }
             
         } catch (error) {

@@ -458,10 +458,42 @@ body {
     justify-content: center;
     font-weight: 600;
     transition: all 0.3s ease;
+    font-size: 1rem;
+    color: #4a5568;
+    /* Ensure buttons are clickable */
+    pointer-events: auto;
+    z-index: 10;
+    position: relative;
 }
 
 .cart-qty-btn:hover {
     background: #cbd5e0;
+    transform: scale(1.1);
+}
+
+.cart-qty-btn:active {
+    transform: scale(0.95);
+    background: #a0aec0;
+}
+
+.cart-qty-btn.remove-btn {
+    background: #fed7d7;
+    color: #e53e3e;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.cart-qty-btn.remove-btn:hover {
+    background: #feb2b2;
+    color: #c53030;
+}
+
+.cart-item-quantity {
+    min-width: 30px;
+    text-align: center;
+    font-weight: 600;
+    color: #4a5568;
+    margin: 0 0.25rem;
 }
 
 .cart-footer {

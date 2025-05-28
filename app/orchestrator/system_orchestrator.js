@@ -144,7 +144,7 @@ class SystemOrchestrator extends EventEmitter {
         if (this.components.speechInput) {
             this.components.speechInput.mainWindow = mainWindow;
             if (this.components.speechInput.isInitialized) { // If already initialized, re-setup IPC
-                 this.components.speechInput.setupIPCHandlers();
+                this.components.speechInput.setupIPCHandlers();
             }
         }
         
@@ -197,7 +197,8 @@ class SystemOrchestrator extends EventEmitter {
 
     async handleSpeechInput(audioData) { // audioData is now {text, confidence, timestamp, source}
         try {
-            console.log(`Processing speech input from ${audioData.source}: "${audioData.text}"`);
+            console.log(`🔍 Processing speech input from ${audioData.source}: "${audioData.text}"`);
+            console.log('🔍 Audio data structure:', audioData);
             
             const text = audioData.text;
             if (!text) {
@@ -207,14 +208,28 @@ class SystemOrchestrator extends EventEmitter {
             // Emit raw transcript for UI update or logging
             this.emit('raw-transcript', { text, confidence: audioData.confidence, source: audioData.source });
 
+            console.log('🔍 Sending to NLU engine...');
             const nluResult = await this.components.nluEngine.processText(text);
-            const dialogResponse = await this.components.dialogManager.processIntent(nluResult, this.config.prompts);
+            console.log('🔍 LLM NLU result:', {
+                intent: nluResult.intent,
+                entities: nluResult.entities,
+                confidence: nluResult.confidence
+            });
+            
+            console.log('🔍 Sending to dialog manager...');
+            const dialogResponse = await this.components.dialogManager.processIntent(nluResult);
+            console.log('🔍 Dialog response:', {
+                text: dialogResponse.text,
+                actions: dialogResponse.actions?.map(a => ({ type: a.type, data: a.data }))
+            });
             
             if (dialogResponse.text) {
+                console.log('🔍 Speaking response:', dialogResponse.text.substring(0, 50) + '...');
                 await this.components.speechOutput.speak(dialogResponse.text);
             }
 
             if (dialogResponse.actions && dialogResponse.actions.length > 0) {
+                console.log('🔍 Executing actions:', dialogResponse.actions.map(a => a.type));
                 await this.executeActions(dialogResponse.actions);
             }
             
@@ -227,11 +242,30 @@ class SystemOrchestrator extends EventEmitter {
                 actions: dialogResponse.actions
             });
 
+            // Return structured response for frontend
+            const response = {
+                intent: nluResult.intent,
+                entities: nluResult.entities,
+                confidence: nluResult.confidence,
+                response_text: dialogResponse.text
+            };
+            console.log('🔍 Returning response to frontend:', response);
+            return response;
+
         } catch (error) {
-            console.error('Speech input processing error:', error);
+            console.error('🚨 Speech input processing error:', error);
+            console.error('🔍 Error stack:', error.stack);
             const errorResponse = this.generateErrorResponse(error);
-            await this.components.speechOutput.speak(errorResponse.response_text);
+            console.log('🔍 Generated error response:', errorResponse);
+            
+            try {
+                await this.components.speechOutput.speak(errorResponse.response_text);
+            } catch (speechError) {
+                console.error('🚨 Failed to speak error response:', speechError);
+            }
+            
             this.emit('system-error', { context: 'speech-input', error: error.message });
+            return errorResponse;
         }
     }
     
@@ -331,23 +365,46 @@ class SystemOrchestrator extends EventEmitter {
     }
 
     async executeActions(actions) {
+        console.log('🔍 EXECUTING ACTIONS:', actions.map(a => ({ type: a.type, data: a.data })));
+        
         for (const action of actions) {
             try {
+                console.log('🔍 Processing action:', action.type, 'with data:', action.data);
+                
                 switch (action.type) {
+                    case 'show_menu': // Handle dialog manager's show_menu action
+                        console.log('🔍 SHOW_MENU action - view:', action.data.view, 'category:', action.data.category);
+                        if (action.data.view === 'categories') {
+                            console.log('🔍 Emitting ui-update: show-categories');
+                            this.emit('ui-update', { type: 'show-categories', data: {} });
+                        } else if (action.data.view === 'items' && action.data.category) {
+                            console.log('🔍 Getting category items for:', action.data.category);
+                            const items = await this.components.menuEngine.getCategory(action.data.category);
+                            console.log('🔍 Emitting ui-update: show-category with', items?.length || 0, 'items');
+                            this.emit('ui-update', { type: 'show-category', data: { category: action.data.category, items }});
+                        }
+                        break;
                     case 'show_menu_category': // More specific action
                         const items = await this.components.menuEngine.getCategory(action.data.category);
                         this.emit('ui-update', { type: 'show-category', data: { category: action.data.category, items }});
                         break;
+                    case 'add_item': // Handle dialog manager's add_item action
                     case 'add_item_to_cart': // More specific
-                        const cartResult = await this.components.menuEngine.addToCart(action.data.item, action.data.quantity || 1);
+                        const cartResult = await this.components.menuEngine.addToCart(action.data.item || action.data, action.data.quantity || 1);
                         this.emit('order-updated', cartResult.cart);
-                        // Confirmation speech is handled by dialog manager's response usually
                         break;
-                    // case 'speak': // This is now handled by dialog manager sending response text
-                    //     await this.components.speechOutput.speak(action.data.text);
-                    //     break;
+                    case 'show_cart': // Handle view cart action
+                        this.emit('ui-update', { type: 'show-cart', data: {} });
+                        break;
+                    case 'process_checkout': // Handle checkout action
+                        this.emit('ui-update', { type: 'process-checkout', data: {} });
+                        break;
+                    case 'end_session': // Handle session end
+                        this.emit('ui-update', { type: 'end-session', data: {} });
+                        break;
                     default:
-                        console.warn('Unknown action type:', action.type);
+                        console.error('Unknown action type:', action.type);
+                        this.emit('action-execution-error', { action: action.type, error: 'Unknown action type' });
                 }
             } catch (error) {
                 console.error(`Failed to execute action ${action.type}:`, error);
