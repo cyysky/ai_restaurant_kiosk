@@ -332,3 +332,8 @@ if (!gotTheLock) {
     }
   });
 }
+// Export for testing purposes
+module.exports = {
+  KioskApplication,
+  kioskApp
+};

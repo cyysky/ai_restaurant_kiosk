@@ -258,6 +258,7 @@ class SpeechInput extends EventEmitter {
     }
 
     handleSpeechResult(data) {
+        console.log('🔍 DEBUG: handleSpeechResult called in main process with data:', JSON.stringify(data));
         console.log('Speech recognition result received in main process:', data.transcript || data.text);
         
         const confidence = data.confidence || (this.config.stt.confidenceThreshold + 0.01); // Default if not provided

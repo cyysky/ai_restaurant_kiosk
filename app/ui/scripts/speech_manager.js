@@ -1206,7 +1206,11 @@ class SpeechManager {
         
         // Send to app for processing
         if (this.app && this.app.handleSpeechInput) {
-            this.app.handleSpeechInput({ text: transcript, confidence });
+            this.app.handleSpeechInput({
+                text: transcript,
+                confidence,
+                source: this.serviceAvailable ? 'python-service' : 'web-speech-api'
+            });
         }
     }
 

@@ -1147,16 +1147,31 @@ class KioskApp {
         console.log('Speech input received from speech manager:', data);
         
         if (data.text) {
-            this.processSpeechInput(data.text).then(() => {
+            // If the source is 'python-service', the backend orchestrator is already handling the full NLU pipeline.
+            // The frontend should just display the transcript (already done by onRawTranscript)
+            // and wait for onProcessedInteraction or onUIUpdate for the final result from the backend.
+            // Only call processSpeechInput if the STT was done by a frontend mechanism (e.g., web-speech-api fallback).
+            if (data.source !== 'python-service') {
+                console.log(`🔍 Frontend processing speech input from source: ${data.source}`);
+                this.processSpeechInput(data.text).then(() => {
+                    // Common cleanup after processing
+                    this.isListening = false;
+                    this.updateVoiceButton(false);
+                    this.avatarManager.setListening(false);
+                }).catch(error => {
+                    console.error('Error processing speech input in KioskApp:', error);
+                    this.isListening = false;
+                    this.updateVoiceButton(false);
+                    this.avatarManager.setListening(false);
+                });
+            } else {
+                console.log(`🔍 Backend (python-service) is handling NLU for: "${data.text}". Frontend will only display transcript and wait for backend response.`);
+                // Common cleanup as the STT part is done.
+                // The backend will eventually send a response that updates the UI further.
                 this.isListening = false;
                 this.updateVoiceButton(false);
                 this.avatarManager.setListening(false);
-            }).catch(error => {
-                console.error('Error processing speech input:', error);
-                this.isListening = false;
-                this.updateVoiceButton(false);
-                this.avatarManager.setListening(false);
-            });
+            }
         }
     }
 

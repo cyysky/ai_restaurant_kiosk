@@ -1,13 +1,13 @@
-# AI-Powered Kiosk System with Gemma 3:4B
+# AI-Powered Kiosk System with llama3.1
 
-A sophisticated offline AI kiosk system featuring a digital avatar, natural language understanding powered by Gemma 3:4B, and dual-mode interaction (voice + touch).
+A sophisticated offline AI kiosk system featuring a digital avatar, natural language understanding powered by llama3.1, and dual-mode interaction (voice + touch).
 
 ## Features
 
 ### Phase 1 Implementation ✅
 
 - **Electron-based Kiosk Application**: Full-screen kiosk mode with touch-optimized UI
-- **Gemma 3:4B Integration**: Local LLM with OpenAI-compatible API for advanced NLU
+- **llama3.1 Integration**: Local LLM with OpenAI-compatible API for advanced NLU
 - **Dual-Mode Interaction**: Voice commands and touch navigation
 - **Digital Avatar**: Animated avatar with emotional responses and speech feedback
 - **Offline Operation**: Complete functionality without internet connection
@@ -22,7 +22,7 @@ A sophisticated offline AI kiosk system featuring a digital avatar, natural lang
 ├── /app/                     # Main application source
 │   ├── /ui/                  # Frontend UI components
 │   ├── /orchestrator/        # System orchestrator
-│   ├── /nlu/                 # NLU engine with Gemma 3:4B
+│   ├── /nlu/                 # NLU engine with llama3.1
 │   ├── /dialog_manager/      # Dialog management
 │   ├── /menu_engine/         # Menu & ordering logic
 │   └── /data_store/          # Local data storage
@@ -36,14 +36,14 @@ A sophisticated offline AI kiosk system featuring a digital avatar, natural lang
 
 ### System Requirements
 - **OS**: Windows 10/11, macOS 10.14+, or Linux (Ubuntu 18.04+)
-- **RAM**: Minimum 8GB (16GB recommended for Gemma 3:4B)
+- **RAM**: Minimum 8GB (16GB recommended for llama3.1)
 - **Storage**: 10GB free space
 - **CPU**: Multi-core processor (Intel i5/AMD Ryzen 5 or better)
-- **GPU**: NVIDIA GPU with at least 12GB VRAM strongly recommended for optimal performance, especially for local speech processing (Whisper) and LLM (Gemma 3:4B).
+- **GPU**: NVIDIA GPU with at least 12GB VRAM strongly recommended for optimal performance, especially for local speech processing (Whisper) and LLM (llama3.1).
 
 ### Software Dependencies
 - **Node.js**: Version 18.0 or higher
-- **Ollama**: For running Gemma 3:4B locally
+- **Ollama**: For running llama3.1 locally
 - **Git**: For cloning the repository
 
 ## Installation
@@ -66,7 +66,7 @@ npm install
 2. Install the application
 3. Open Command Prompt and run:
 ```cmd
-ollama pull gemma3:4b
+ollama pull llama3.1:latest
 ```
 
 #### macOS:
@@ -74,8 +74,8 @@ ollama pull gemma3:4b
 # Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Pull Gemma 3:4B model
-ollama pull gemma3:4b
+# Pull llama3.1 model
+ollama pull llama3.1:latest
 ```
 
 #### Linux:
@@ -83,8 +83,8 @@ ollama pull gemma3:4b
 # Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Pull Gemma 3:4B model
-ollama pull gemma3:4b
+# Pull llama3.1 model
+ollama pull llama3.1:latest
 ```
 
 ### 4. Start Ollama Server
@@ -93,10 +93,10 @@ ollama pull gemma3:4b
 ollama serve
 ```
 
-### 5. Verify Gemma 3:4B Installation
+### 5. Verify llama3.1 Installation
 ```bash
 # Test the model
-ollama run gemma3:4b "Hello, how are you?"
+ollama run llama3.1:latest "Hello, how are you?"
 ```
 
 ## Configuration
@@ -105,9 +105,9 @@ ollama run gemma3:4b "Hello, how are you?"
 ```json
 {
   "baseURL": "http://localhost:11434/v1",
-  "model": "gemma3:4b",
+  "model": "llama3.1:latest",
   "temperature": 0.7,
-  "maxTokens": 150,
+  "maxTokens": 1500,
   "timeout": 10000
 }
 ```
@@ -243,7 +243,7 @@ npm start
 npm run dev
 ```
 
-The Kiosk application will connect to the Python service for speech functionalities. Ensure Ollama with Gemma 3:4B is also running as per the "Installation" section if you haven't started it yet.
+The Kiosk application will connect to the Python service for speech functionalities. Ensure Ollama with llama3.1:latest is also running as per the "Installation" section if you haven't started it yet.
 ## Usage
 
 ### Voice Interaction
@@ -270,7 +270,7 @@ The Kiosk application will connect to the Python service for speech functionalit
 
 ### Common Issues
 
-#### Gemma 3:4B Not Responding
+#### llama3.1 Not Responding
 ```bash
 # Check if Ollama is running
 curl http://localhost:11434/api/tags
@@ -389,7 +389,7 @@ await menuEngine.addToCart(item, quantity);
 
 ## Performance Optimization
 
-### Gemma 3:4B Optimization
+### llama3.1 Optimization
 ```bash
 # Use GPU acceleration (if available)
 OLLAMA_GPU=1 ollama serve
@@ -449,7 +449,7 @@ MIT License - see LICENSE file for details.
 
 ## Acknowledgments
 
-- **Gemma 3:4B**: Google's efficient language model
+- **llama3.1**: Meta's efficient language model
 - **Ollama**: Local LLM inference platform
 - **Electron**: Cross-platform desktop application framework
 - **Web Speech API**: Browser-based speech recognition and synthesis
