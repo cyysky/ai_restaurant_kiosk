@@ -1,5 +1,8 @@
 # AI-Powered Kiosk System with llama3.1
 
+Video Introduction
+https://www.facebook.com/share/v/1APmyuPXqz/
+
 [![Tests](https://img.shields.io/badge/tests-70%2F70%20passing-brightgreen)](tests/README.md)
 [![Coverage](https://img.shields.io/badge/coverage-90%25+-brightgreen)](tests/README.md)
 [![Jest](https://img.shields.io/badge/tested%20with-Jest-blue)](https://jestjs.io/)
